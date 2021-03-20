@@ -13,18 +13,24 @@
 #include <GL/glut.h>
 
 
-static float Rot = 0.0;
+static float Rot = 0;
 static GLboolean Anim = 1;
 
+static float *T;
+static int n;
+static float *x;
+static float *y;
+static float Tmax;
+static float Tmin;
 
 static void Idle( void )
 {
    float t = glutGet(GLUT_ELAPSED_TIME) * 0.001;  /* in seconds */
-   Rot = t * 360 / 4;  /* 1 rotation per 4 seconds */
+   //Rot = t * 360 / 4;  /* 1 rotation per 4 seconds */
    glutPostRedisplay();
 }
 
-static float* Read(char *filename){
+static void Initialize(char *filename){
   FILE *f;
   f = fopen(filename, "r");
 
@@ -36,35 +42,37 @@ static float* Read(char *filename){
 
   int nx, ny;
   fscanf(f,"%d %d", &nx, &ny);
+  n = nx;
   int nT = nx*ny;
-  float* T = malloc(nT*sizeof(float));
+  T = malloc(nT*sizeof(float));
 
   for(int i = 0; i < nT; i++){
     fscanf(f,"%f",T+i);
   }
 
+   x = malloc((n)*sizeof(float));
+   y = malloc((n)*sizeof(float));
+   x[0] = 0;
+   y[0] = 0;
+   x[n-1] = 1;
+   y[n-1] = 1;
+
+   double h = 1.0/((double) n - 1);
+   for(int i = 1; i < (n-1); i++){
+    x[i] = x[i-1] + h;
+    y[i] = y[i-1] + h;
+   }
+
   fclose(f);
-  return T;
+
+  
 }
 
 
 static void Display( void )
 {
    /* draw background gradient */
-  float *T = Read("test.txt");
-  int n = 100;
-  double h = 1.0/((double) n - 1);
-  float* x = malloc((n)*sizeof(float));
-  float* y = malloc((n)*sizeof(float));
-  x[0] = 0;
-  y[0] = 0;
-  x[n-1] = 1;
-  y[n-1] = 1;
 
-  for(int i = 1; i < (n-1); i++){
-    x[i] = x[i-1] + h;
-    y[i] = y[i-1] + h;
-  }
 
    
    glBegin(GL_POLYGON);
@@ -106,10 +114,6 @@ static void Display( void )
    glPopMatrix();
 
    glutSwapBuffers();
-
-   free(T);
-   free(x);
-   free(y);
 }
 
 
@@ -156,14 +160,15 @@ int main( int argc, char *argv[] )
 {
    glutInit( &argc, argv );
    glutInitWindowPosition( 0, 0 );
-   glutInitWindowSize( 400, 300 );
+   glutInitWindowSize( 1000,  1000);
 
    glutInitDisplayMode( GLUT_RGB | GLUT_DOUBLE );
 
    glutCreateWindow(argv[0]);
 
 
-
+   Initialize(argv[1]);
+  
   
    glutKeyboardFunc( Key );
    glutDisplayFunc( Display );
@@ -171,5 +176,9 @@ int main( int argc, char *argv[] )
       glutIdleFunc( Idle );
 
    glutMainLoop();
+
+   free(T);
+   free(x);
+   free(y);
    return 0;
 }

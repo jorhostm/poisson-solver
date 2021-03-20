@@ -58,7 +58,7 @@ static double* create_linear_array(const double from, const double to, const uns
 
 }
 
-static int _sor_iterate(double* T, double* b, short* A, const unsigned int n, const unsigned int start, const unsigned int end){
+static int _sor_iterate(double* T, double* b, const unsigned int n, const unsigned int start, const unsigned int end, const int nm_x0, const int nm_x1, const int nm_y0, const int nm_y1){
 	// Gauss-Seidel iterative solution
 	int nT = n*n;
 	int count = end-start;
@@ -66,11 +66,9 @@ static int _sor_iterate(double* T, double* b, short* A, const unsigned int n, co
 	double h2 = h*h;
 	double omega = _omega(n);
 
-	double reltol = 0.001;
+	double reltol = 0.00000001;
 
     double rel_res = 1.0;
-
-   
 
     int iterations = 0;
     
@@ -80,14 +78,32 @@ static int _sor_iterate(double* T, double* b, short* A, const unsigned int n, co
         for (int i = start; i < end; i++){
             for (int j = start; j < end; j++){
 
-            	int a0 = A[i*n*4+j*4];
-            	int a1 = A[i*n*4+j*4+1];
-            	int a2 = A[i*n*4+j*4+2];
-            	int a3 = A[i*n*4+j*4+3];
+            	int a0 = 1;
+            	int a1 = 1;
+            	int a2 = 1;
+            	int a3 = 1;
+
+				if(i == 1 && nm_x0){
+                	a1 = 0;
+                	a3 = 2;
+                }
+                else if(i == n-2 && nm_x1){
+                	a1 = 2;
+                	a3 = 0;
+                }
+
+                if(j == 1 && nm_y0){
+                	a0 = 0;
+                	a2 = 2;
+                }
+                else if(j == n-2 && nm_y1){
+                	a0 = 2;
+                	a2 = 0;
+                }
 
                 double R = a0*T[i*n+j-1]+a1*T[(i-1)*n+j]-4*T[i*n+j]+a2*T[i*n+j+1]+a3*T[(i+1)*n+j]-h2*b[i*n+j];
                 double dT = 0.25*omega*R;
-                T[i*n+j]+=dT;
+                T[i*n+j] += dT;
                 dTmax = fmax(fabs(dT),dTmax);
 
             }
@@ -108,7 +124,7 @@ static int _sor_iterate(double* T, double* b, short* A, const unsigned int n, co
     return iterations;  
 }
 
-double* solve_poisson(const unsigned int n, double (*phi)(double x, double y), double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
+void solve_poisson(double *T, const unsigned int n, double (*phi)(double x, double y), double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
 
 	double x0, y0 = 0;
 	double xEnd, yEnd = 1;
@@ -124,54 +140,15 @@ double* solve_poisson(const unsigned int n, double (*phi)(double x, double y), d
 	double* b = malloc(nT*sizeof(double));
 
 	_init_values(b,(*g),n,x,y,0,n,0,n);
-
-	double* T = calloc(nT,sizeof(double));
 	
 	_init_values(T,(*phi),n,x,y,0,n,0,1);
 	_init_values(T,(*phi),n,x,y,0,n,n-1,n);
 	_init_values(T,(*phi),n,x,y,0,1,0,n);
 	_init_values(T,(*phi),n,x,y,n-1,n,0,n);
-	
-
-	/*
-		Precompute the coefficients of the iterative scheme
-	*/
-	short* A = malloc(nT*4*sizeof(short));
-
-	for (int i = 1; i < n-1; i++){
-            for (int j = 1; j < n-1; j++){
-                if(i == 1 && neumann_x0){
-                	A[i*n*4+j*4+1] = 0;
-                	A[i*n*4+j*4+3] = 2;
-                }
-                else if(i == n-2 && neumann_x1){
-                	A[i*n*4+j*4+1] = 2;
-                	A[i*n*4+j*4+3] = 0;
-                }
-                else{
-                	A[i*n*4+j*4+1] = 1;
-                	A[i*n*4+j*4+3] = 1;
-                }
-
-                if(j == 1 && neumann_y0){
-                	A[i*n*4+j*4] = 0;
-                	A[i*n*4+j*4+2] = 2;
-                }
-                else if(j == n-2 && neumann_y1){
-                	A[i*n*4+j*4] = 2;
-                	A[i*n*4+j*4+2] = 0;
-                }
-                else{
-                	A[i*n*4+j*4] = 1;
-                	A[i*n*4+j*4+2] = 1;
-                }
-                
-            }
-        }
         
-    int it = _sor_iterate(T, b, A, n, 1, n-1);
+    int it = _sor_iterate(T, b, n, 1, n-1, neumann_x0, neumann_x1, neumann_y0, neumann_y1);
    
-    printf("%d iterations\n", it);
+    printf("Finnished after %d iterations\n", it);
 	
 	if (neumann_x0) _copy_neumann_border(T, n, 0,0,0,n-1, 1,1,0,n-1);
 	if (neumann_x1) _copy_neumann_border(T, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
@@ -180,10 +157,9 @@ double* solve_poisson(const unsigned int n, double (*phi)(double x, double y), d
 	
 
 	free(x);
-	//free(y);
+//	free(y);
 	free(b);
-	free(A);
-	return T;
+
 
 }
 
@@ -202,7 +178,7 @@ void print_solution_to_file(double *T, const unsigned int n, const char *filenam
     for (int j = 0; j < n; j++){
             for (int i = 0; i < n; i++){
                 
-            	fprintf(f, "\n%f",T[i*n+j]);
+            	fprintf(f, "\n%f",T[j*n+i]);
                 
             }
         }
@@ -286,9 +262,10 @@ double get_value_at(double *T, const unsigned int n, const double x, const doubl
 	//free(y_values);
 
 	/*Debug stuff*/
+	/*
 	printf("i_left = %d, i_right = %d, j_left = %d, j_right = %d\n", i_left, i_right, j_left, j_right);
 	printf("t11 = %f, t21 = %f, t12 = %f, t22 = %f\n", t11, t21, t12, t22);
-
+	*/
 	return t_xy;
 }
 
