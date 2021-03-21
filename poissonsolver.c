@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 
-
 static double _omega(const unsigned int n){
 	
 	double pi = acos(-1);
@@ -59,14 +58,14 @@ static double* create_linear_array(const double from, const double to, const uns
 }
 
 static int _sor_iterate(double* T, double* b, const unsigned int n, const unsigned int start, const unsigned int end, const int nm_x0, const int nm_x1, const int nm_y0, const int nm_y1){
-	// Gauss-Seidel iterative solution
-	int nT = n*n;
+	// SOR iterative solution
+	int n2 = n*n;
 	int count = end-start;
 	double h = 1.0/((double) n - 1);
 	double h2 = h*h;
 	double omega = _omega(n);
 
-	double reltol = 0.00000001;
+	double reltol = 0.0001;
 
     double rel_res = 1.0;
 
@@ -74,8 +73,11 @@ static int _sor_iterate(double* T, double* b, const unsigned int n, const unsign
     
     
     while (rel_res > reltol){
-        double dTmax = 0.0;
-        for (int i = start; i < end; i++){
+        
+		double Tmax = 0.0;
+		double dTmax = 0.0;
+        
+		for (int i = start; i < end; i++){
             for (int j = start; j < end; j++){
 
             	int a0 = 1;
@@ -101,20 +103,16 @@ static int _sor_iterate(double* T, double* b, const unsigned int n, const unsign
                 	a2 = 0;
                 }
 
-                double R = a0*T[i*n+j-1]+a1*T[(i-1)*n+j]-4*T[i*n+j]+a2*T[i*n+j+1]+a3*T[(i+1)*n+j]-h2*b[i*n+j];
+                double R = a0*T[i*n+j-1] + a1*T[(i-1)*n+j] - 4*T[i*n+j] + a2*T[i*n+j+1] + a3*T[(i+1)*n+j] - h2*b[i*n+j];
                 double dT = 0.25*omega*R;
                 T[i*n+j] += dT;
-                dTmax = fmax(fabs(dT),dTmax);
+                
+				Tmax = fmax(fabs(T[i*n+j]), Tmax);
+				dTmax = fmax(fabs(dT), dTmax);
 
             }
         }
 
-        double Tmax = 0;
-        for (int i = 0; i < nT;i++){
-        	if(fabs(T[i]) > Tmax){
-        		Tmax = fabs(T[i]);
-        	}
-        }
         rel_res = dTmax/Tmax;
        	
         iterations++;
@@ -131,13 +129,13 @@ void solve_poisson(double *T, const unsigned int n, double (*phi)(double x, doub
 	double h = 1.0/((double) n - 1);
 
 	/* Amount of gridpoints*/
-	int nT = n*n;
+	int n2 = n*n;
 
 	double *x = create_linear_array(0, 1, n);
 	double *y = x;
 
 	
-	double* b = malloc(nT*sizeof(double));
+	double* b = malloc(n2*sizeof(double));
 
 	_init_values(b,(*g),n,x,y,0,n,0,n);
 	
@@ -178,7 +176,7 @@ void print_solution_to_file(double *T, const unsigned int n, const char *filenam
     for (int j = 0; j < n; j++){
             for (int i = 0; i < n; i++){
                 
-            	fprintf(f, "\n%f",T[j*n+i]);
+            	fprintf(f, "\n%lf",T[j*n+i]);
                 
             }
         }

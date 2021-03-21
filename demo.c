@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <float.h>
 #define GL_GLEXT_LEGACY
 #include <GL/glut.h>
 
@@ -20,8 +21,12 @@ static float *T;
 static int n;
 static float *x;
 static float *y;
-static float Tmax;
-static float Tmin;
+static float Tmax = FLT_MIN;
+static float Tmin = FLT_MAX;
+
+static float z = -1;
+static float fx = 0;
+static float fy = 0;
 
 static void Idle( void )
 {
@@ -29,6 +34,7 @@ static void Idle( void )
    //Rot = t * 360 / 4;  /* 1 rotation per 4 seconds */
    glutPostRedisplay();
 }
+
 
 static void Initialize(char *filename){
   FILE *f;
@@ -44,11 +50,18 @@ static void Initialize(char *filename){
   fscanf(f,"%d %d", &nx, &ny);
   n = nx;
   int nT = nx*ny;
+  
   T = malloc(nT*sizeof(float));
 
   for(int i = 0; i < nT; i++){
-    fscanf(f,"%f",T+i);
-  }
+    float t;
+    fscanf(f,"%f",&t);
+    T[i] = t;
+
+    if (t > Tmax) Tmax = t;
+    else if (t < Tmin) Tmin = t;
+   
+   }
 
    x = malloc((n)*sizeof(float));
    y = malloc((n)*sizeof(float));
@@ -65,27 +78,40 @@ static void Initialize(char *filename){
 
   fclose(f);
 
-  
+  glClearColor (0.5,0,0.5,0);
 }
 
+static void setColour(float t, float Tmax, float Tmin, float *min_colour, float *max_colour){
+   float dt = Tmax - Tmin;
+   float tn = (t-Tmin)/dt;
+   float colours[3];
+   
+   for(int i = 0; i < 3; i++){
+      float c = (1-tn)*min_colour[i] + tn*max_colour[i];
+      colours[i] = c;
+   }
+   glColor3f(colours[0],colours[1],colours[2]);
+}
 
 static void Display( void )
 {
+
+   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    /* draw background gradient */
-
+   float min_color[3] = {0,0,0};
+   float max_color[3] = {1,1,1};
 
    
-   glBegin(GL_POLYGON);
-   glColor3f(1.0, 1.0, 1.2); glVertex2f(-1.5, -1.0);
-   glColor3f(1.0, 1.0, 1.2); glVertex2f( 1.5, -1.0);
-   glColor3f(1.0, 1.0, 1.0); glVertex2f( 1.5,  1.0);
-   glColor3f(1.0, 1.0, 1.0); glVertex2f(-1.5,  1.0);
-   glEnd();
-
+  
    glPushMatrix();
-   glRotatef(Rot, 0, 0, 1);
-
    
+   glMatrixMode( GL_PROJECTION );
+   glLoadIdentity();
+   
+   glMatrixMode( GL_MODELVIEW );
+   glLoadIdentity();
+   glTranslatef(-0.5,-0.5,0);
+  
    glBegin(GL_QUADS);
    
     for(int j = 0; j < n-1; j++){
@@ -94,20 +120,18 @@ static void Display( void )
         float t2 = 2*T[i*n+j+1];
         float t3 = 2*T[(i+1)*n+j+1];
         float t4 = 2*T[(i+1)*n+j];
-        glColor3f(t1, t1, t1); glVertex2f(0.7*x[i], 0.7*y[j]);
-        glColor3f(t2, t2, t2); glVertex2f(0.7*x[i], 0.7*y[j+1]);
-        glColor3f(t3, t3, t3); glVertex2f(0.7*x[i+1], 0.7*y[j+1]);
-        glColor3f(t4, t4, t4); glVertex2f(0.7*x[i+1], 0.7*y[j]);
+
+        
+        setColour(t1, Tmax, Tmin, min_color, max_color); glVertex2f(x[i], y[j]);
+        
+        setColour(t2, Tmax, Tmin, min_color, max_color); glVertex2f(x[i], y[j+1]);
+        
+        setColour(t3, Tmax, Tmin, min_color, max_color); glVertex2f(x[i+1], y[j+1]);
+        
+        setColour(t4, Tmax, Tmin, min_color, max_color); glVertex2f(x[i+1], y[j]);
     }
     }
 
-
-   /*
-   glTexCoord2f(0, 1);  glVertex2f(-1, -0.5);
-   glTexCoord2f(1, 1);  glVertex2f( 1, -0.5);
-   glTexCoord2f(1, 0);  glVertex2f( 1,  0.5);
-   glTexCoord2f(0, 0);  glVertex2f(-1,  0.5);
-   */
    glEnd();
    
 
@@ -136,8 +160,17 @@ static void Key( unsigned char key, int x, int y )
       case 27:
          exit(0);
          break;
+      case 'w':
+         fy += 1;
+         break;
       case 's':
-         Rot += 0.5;
+         fy -= 1;
+         break;
+      case 'a':
+         fx += 1;
+         break;
+      case 'd':
+         fx -= 1;
          break;
       case ' ':
          Anim = !Anim;
@@ -168,7 +201,7 @@ int main( int argc, char *argv[] )
 
 
    Initialize(argv[1]);
-  
+   glEnable(GL_DEPTH_TEST);
   
    glutKeyboardFunc( Key );
    glutDisplayFunc( Display );
@@ -180,5 +213,6 @@ int main( int argc, char *argv[] )
    free(T);
    free(x);
    free(y);
+
    return 0;
 }
