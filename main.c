@@ -8,11 +8,11 @@
 
 static int n;
 
-static void *solve1();
-static void *solve2();
-static void *solve3();
-static void *solve4();
-static void *solve5();
+static void solve0();
+static void solve1();
+static void solve2();
+static void solve3();
+static void solve4();
 
 
 int main(int argc, char *argv[]){
@@ -31,7 +31,7 @@ int main(int argc, char *argv[]){
 
 	time_t t0 = time(NULL);
 	
-	void *solve[5] = {solve1, solve2, solve3, solve4, solve5};
+	void *solve[5] = {&solve0, &solve1, &solve2, &solve3, &solve4};
 	pthread_t thread[5];
 	
 	for(int i = 0; i < 5; i++){
@@ -48,39 +48,47 @@ int main(int argc, char *argv[]){
 }
 
 /*	
-	Testing of the solver
+	Testing the solver
 	Solve the poisson equation with mixed boundary condition and g(x,y) = 0
 	Neumann at x = 0 and y = 0, Dirichlet phi(x,1) = 1 and phi(1,y) = 0
 	Then save the solution to file
 */
-static void *solve1(){
+static void solve0(){
 
-	double *result = malloc(n*n*sizeof(double));
-	solve_poisson(result,n, mix, zero, NM_TRUE,NM_FALSE,NM_TRUE,NM_FALSE);
-	print_solution_to_file(result, n, "solutions/Mixed.txt");
-	free(result);
+
+	bvp_t bvp;
+	bvp_create(&bvp, n, &mix, &zero, NM_TRUE,NM_FALSE,NM_TRUE,NM_FALSE);
+	solve_poisson_bvp(&bvp);
+	print_solution_to_file(&bvp,"solutions/Mixed.txt");
+	bvp_free(&bvp);
 }
 
 /*
 	Solve the poisson equation with Dirichlet boundary condition and g(x,y) = g1
 	Then save the solution to file
 */
-static void *solve2(){
-	double *result = malloc(n*n*sizeof(double));
-	solve_poisson(result,n, phi, g1, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	print_solution_to_file(result, n, "solutions/Dirichlet1.txt");
-	free(result);
+static void solve1(){
+
+
+	bvp_t bvp;
+	bvp_create(&bvp, n, &phi, &g1, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
+	solve_poisson_bvp(&bvp);
+	print_solution_to_file(&bvp,"solutions/Dirichlet1.txt");
+	bvp_free(&bvp);
 }
 
 /*
 	Solve the poisson equation with Dirichlet boundary condition and g(x,y) = g2
 	Then save the solution to file
 */
-static void *solve3(){
-	double *result = malloc(n*n*sizeof(double));
-	solve_poisson(result, n, phi, g2, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	print_solution_to_file(result, n, "solutions/Dirichlet2.txt");
-	free(result);
+static void solve2(){
+	
+
+	bvp_t bvp;
+	bvp_create(&bvp, n, &phi, &g2, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
+	solve_poisson_bvp(&bvp);
+	print_solution_to_file(&bvp,"solutions/Dirichlet2.txt");
+	bvp_free(&bvp);
 }
 
 /*
@@ -88,13 +96,15 @@ static void *solve3(){
 	Correct the solution so that phi(0,0) = 0
 	Then save the solution to file
 */
-static void *solve4(){
-	double *result = malloc(n*n*sizeof(double));
-	solve_poisson(result,n, zero, g1, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	double delta_t = get_value_at(result, n, 0, 0);
-	shift_solution(result,n,-delta_t);
-	print_solution_to_file(result, n, "solutions/Neumann1.txt");
-	free(result);
+static void solve3(){
+
+	bvp_t bvp;
+	bvp_create(&bvp, n, &zero, &g1, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
+	solve_poisson_bvp(&bvp);
+	double delta_t = get_value_at(&bvp,0,0);
+	shift_solution(&bvp, -1*delta_t);
+	print_solution_to_file(&bvp,"solutions/Neumann1.txt");
+	bvp_free(&bvp);
 }
 
 /*
@@ -102,11 +112,13 @@ static void *solve4(){
 	Correct the solution so that phi(0,0) = 0
 	Then save the solution to file
 */
-static void *solve5(){
-	double *result = malloc(n*n*sizeof(double));
-	solve_poisson(result,n, zero, g2, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	double delta_t = get_value_at(result, n, 0, 0);
-	shift_solution(result,n,-delta_t);
-	print_solution_to_file(result, n, "solutions/Neumann2.txt");
-	free(result);
+static void solve4(){
+	
+	bvp_t bvp;
+	bvp_create(&bvp, n, &zero, &g2, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
+	solve_poisson_bvp(&bvp);
+	double delta_t = get_value_at(&bvp,0,0);
+	shift_solution(&bvp, -1*delta_t);
+	print_solution_to_file(&bvp,"solutions/Neumann2.txt");
+	bvp_free(&bvp);
 }

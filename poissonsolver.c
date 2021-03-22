@@ -1,21 +1,32 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include <pthread.h>
+
+#include "include/poissonsolver.h"
+
+struct thread_data{
+   int  thread_id;
+   int  sum;
+   char *message;
+};
 
 
+/* Computes the optimal relaxation coefficient omega for the SOR iteration */
 static double _omega(const unsigned int n){
 	
 	double pi = acos(-1);
 	double rho = cos(pi/(n));
+	double omega = 0.25*2.0/(1+sqrt(1-pow(rho,2)));
 	
-	return 2.0/(1+sqrt(1-pow(rho,2)));
+	return omega;
 }
 
 
-static void _init_values(double* T, double (*f)(double x, double y), const unsigned int n, double* x, double* y, int i0, int i1, int j0, int j1){
+static void _init_values(double* T, double (*fun)(double x, double y), const unsigned int n, double* x, double* y, int i0, int i1, int j0, int j1){
 	for(int i = i0; i < i1; i++){
 		for(int j = j0; j < j1; j++){
-			T[i*n+j] = (*f)(x[i],y[j]);
+			T[i*n+j] = fun(x[i],y[j]);
 		}
 	}
 }
@@ -57,56 +68,73 @@ static double* create_linear_array(const double from, const double to, const uns
 
 }
 
-static int _sor_iterate(double* T, double* b, const unsigned int n, const unsigned int start, const unsigned int end, const int nm_x0, const int nm_x1, const int nm_y0, const int nm_y1){
-	// SOR iterative solution
-	int n2 = n*n;
-	int count = end-start;
+// SOR iterative solution
+static int sor(bvp_t *bvp){
+	
+	unsigned int n = bvp->n;
+	double *T = bvp->result;
+	double *b = bvp->b;
 	double h = 1.0/((double) n - 1);
 	double h2 = h*h;
 	double omega = _omega(n);
 
-	double reltol = 0.0001;
+	double reltol = 0.000001;
 
     double rel_res = 1.0;
 
     int iterations = 0;
-    
+
+	int nm_x0 = bvp->nm_x0;
+	int nm_x1 = bvp->nm_x1;
+	int nm_y0 = bvp->nm_y0;
+	int nm_y1 = bvp->nm_y1;
+
     
     while (rel_res > reltol){
         
 		double Tmax = 0.0;
 		double dTmax = 0.0;
         
-		for (int i = start; i < end; i++){
-            for (int j = start; j < end; j++){
+		for (int i = 1; i < n-1; i++){
 
-            	int a0 = 1;
-            	int a1 = 1;
-            	int a2 = 1;
-            	int a3 = 1;
+			int a1 = 1;	//	T(i-1,j)
+			int a3 = 1;	// 	T(i+1,j)
+			
+			/* Check if there is a Neumann boundary at x = 0 */
+			if(i == 1 && nm_x0){
+				a1 = 0;
+				a3 = 2;
+			}
+			/* Check if there is a Neumann boundary at x = 1 */
+			else if(i == n-2 && nm_x1){
+				a1 = 2;
+				a3 = 0;
+			}
 
-				if(i == 1 && nm_x0){
-                	a1 = 0;
-                	a3 = 2;
-                }
-                else if(i == n-2 && nm_x1){
-                	a1 = 2;
-                	a3 = 0;
-                }
+            for (int j = 1; j < n-1; j++){
 
+				int a0 = 1;	// 	T(i,j-1)
+            	int a2 = 1; // 	T(i,j+1)
+
+				/* Check if there is a Neumann boundary at y = 0 */
                 if(j == 1 && nm_y0){
                 	a0 = 0;
                 	a2 = 2;
                 }
+				/* Check if there is a Neumann boundary at y = 1 */
                 else if(j == n-2 && nm_y1){
                 	a0 = 2;
                 	a2 = 0;
                 }
 
+				/* Compute the residual */
                 double R = a0*T[i*n+j-1] + a1*T[(i-1)*n+j] - 4*T[i*n+j] + a2*T[i*n+j+1] + a3*T[(i+1)*n+j] - h2*b[i*n+j];
-                double dT = 0.25*omega*R;
-                T[i*n+j] += dT;
+                /* Apply relaxation coefficient */
+				double dT = omega*R;
+                /* Add the residual to the solution */
+				T[i*n+j] += dT;
                 
+				/* Update the maximum value and residual */
 				Tmax = fmax(fabs(T[i*n+j]), Tmax);
 				dTmax = fmax(fabs(dT), dTmax);
 
@@ -122,47 +150,21 @@ static int _sor_iterate(double* T, double* b, const unsigned int n, const unsign
     return iterations;  
 }
 
-void solve_poisson(double *T, const unsigned int n, double (*phi)(double x, double y), double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
+void solve_poisson_bvp(bvp_t *bvp){
 
-	double x0, y0 = 0;
-	double xEnd, yEnd = 1;
-	double h = 1.0/((double) n - 1);
-
-	/* Amount of gridpoints*/
-	int n2 = n*n;
-
-	double *x = create_linear_array(0, 1, n);
-	double *y = x;
-
-	
-	double* b = malloc(n2*sizeof(double));
-
-	_init_values(b,(*g),n,x,y,0,n,0,n);
-	
-	_init_values(T,(*phi),n,x,y,0,n,0,1);
-	_init_values(T,(*phi),n,x,y,0,n,n-1,n);
-	_init_values(T,(*phi),n,x,y,0,1,0,n);
-	_init_values(T,(*phi),n,x,y,n-1,n,0,n);
-        
-    int it = _sor_iterate(T, b, n, 1, n-1, neumann_x0, neumann_x1, neumann_y0, neumann_y1);
-   
-    printf("Finnished after %d iterations\n", it);
-	
-	if (neumann_x0) _copy_neumann_border(T, n, 0,0,0,n-1, 1,1,0,n-1);
-	if (neumann_x1) _copy_neumann_border(T, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
-	if (neumann_y0) _copy_neumann_border(T, n, 0,n-1,0,0, 0,n-1,1,1);
-	if (neumann_y1) _copy_neumann_border(T, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
-	
-
-	free(x);
-//	free(y);
-	free(b);
-
+	int it = sor(bvp);
+	printf("Finnished after %d iterations\n", it);
+	int n = bvp->n;
+	if (bvp->nm_x0) _copy_neumann_border(bvp->result, n, 0,0,0,n-1, 1,1,0,n-1);
+	if (bvp->nm_x1) _copy_neumann_border(bvp->result, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
+	if (bvp->nm_y0) _copy_neumann_border(bvp->result, n, 0,n-1,0,0, 0,n-1,1,1);
+	if (bvp->nm_y1) _copy_neumann_border(bvp->result, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
 
 }
 
-void print_solution_to_file(double *T, const unsigned int n, const char *filename){
-
+void print_solution_to_file(bvp_t *bvp, const char *filename){
+	int n = bvp->n;
+	double *result = bvp->result;
 	FILE *f;
     f = fopen(filename, "w");
 
@@ -176,7 +178,7 @@ void print_solution_to_file(double *T, const unsigned int n, const char *filenam
     for (int j = 0; j < n; j++){
             for (int i = 0; i < n; i++){
                 
-            	fprintf(f, "\n%lf",T[j*n+i]);
+            	fprintf(f, "\n%f",result[j*n+i]);
                 
             }
         }
@@ -185,8 +187,12 @@ void print_solution_to_file(double *T, const unsigned int n, const char *filenam
 
 }
 
+
 // Finds the value of T(x,y) using bilinear interpolation
-double get_value_at(double *T, const unsigned int n, const double x, const double y){
+double get_value_at(bvp_t *bvp, const double x, const double y){
+
+	double *result = bvp->result;
+	int n = bvp->n;
 
 	// Domain check
 	if (x < 0 || x > 1 || y < 0 || y > 1){
@@ -239,10 +245,10 @@ double get_value_at(double *T, const unsigned int n, const double x, const doubl
 	
 	}
 
-	double t11 = T[i_left*n + j_left];
-	double t21 = T[i_right*n + j_left];
-	double t12 = T[i_left*n + j_right];
-	double t22 = T[i_right*n + j_right];
+	double t11 = result[i_left*n + j_left];
+	double t21 = result[i_right*n + j_left];
+	double t12 = result[i_left*n + j_right];
+	double t22 = result[i_right*n + j_right];
 
 	double h = x_values[1] - x_values[0];
 
@@ -258,24 +264,55 @@ double get_value_at(double *T, const unsigned int n, const double x, const doubl
 
 	free(x_values);
 	//free(y_values);
-
-	/*Debug stuff*/
-	/*
-	printf("i_left = %d, i_right = %d, j_left = %d, j_right = %d\n", i_left, i_right, j_left, j_right);
-	printf("t11 = %f, t21 = %f, t12 = %f, t22 = %f\n", t11, t21, t12, t22);
-	*/
 	return t_xy;
 }
 
-void shift_solution(double *T, const unsigned int n, const double delta_t){
+void shift_solution(bvp_t *bvp, const double delta_t){
 
-	const int nT = n*n;
+	double *result = bvp->result;
+	int n = bvp->n;
+	n = n*n;
 	
-	for (int i = 0; i < nT; i++){
+	for (int i = 0; i < n; i++){
 
-		T[i] += delta_t;
+		result[i] += delta_t;
 
 	}
+}
 
+void bvp_create(bvp_t *bvp, const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
+	
 
+	bvp->result = malloc(n*n*sizeof(double));
+	bvp->n = n;
+	bvp->phi = phi;
+	bvp->g = g;
+	bvp->b = malloc(n*n*sizeof(double));
+	bvp->nm_x0 = neumann_x0;
+	bvp->nm_x1 = neumann_x1;
+	bvp->nm_y0 = neumann_y0;
+	bvp->nm_y1 = neumann_y1;
+
+	double *x = create_linear_array(0, 1, n);
+	double *y = x;
+
+	// Initialize the RHS
+	_init_values(bvp->b,g,n,x,y,0,n,0,n);
+	
+	// Initialize the boundaries
+	_init_values(bvp->result,phi,n,x,y,0,n,0,1);
+	_init_values(bvp->result,phi,n,x,y,0,n,n-1,n);
+	_init_values(bvp->result,phi,n,x,y,0,1,0,n);
+	_init_values(bvp->result,phi,n,x,y,n-1,n,0,n);
+
+	free(x);
+	//free(y);
+
+}
+
+void bvp_free(bvp_t *bvp){
+	free(bvp->result);
+	bvp->result = NULL;
+	free(bvp->b);
+	bvp->b = NULL;
 }

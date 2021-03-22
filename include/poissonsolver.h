@@ -4,12 +4,30 @@
 #define NM_TRUE  1
 #define NM_FALSE  0
 
-void solve_poisson(double *T, const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1);
+// Poisson Boundary Value Problem type
+typedef struct
+{
+    double *result;
+    unsigned int n;
+    double (*phi)(double x, double y);
+    double (*g)(double x, double y);
+    double *b;
+    int nm_x0;
+    int nm_x1;
+    int nm_y0;
+    int nm_y1;
+} bvp_t;
 
-void print_solution_to_file(double *T, const unsigned int n, const char *filename);
+double get_value_at(bvp_t *bvp, const double x, const double y);
 
-double get_value_at(double *T, const unsigned int n, const double x, const double y);
+void shift_solution(bvp_t *bvp, const double delta_t);
 
-void shift_solution(double *T, const unsigned int n, const double delta_t);
+void print_solution_to_file(bvp_t *bvp, const char *filename);
+
+void solve_poisson_bvp(bvp_t *bvp);
+
+void bvp_create(bvp_t *bvp, const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1);
+
+void bvp_free(bvp_t *bvp);
 
 #endif

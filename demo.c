@@ -11,6 +11,7 @@
 #include <string.h>
 #include <float.h>
 #define GL_GLEXT_LEGACY
+#include <GL/gl.h>
 #include <GL/glut.h>
 
 
@@ -141,14 +142,15 @@ static void Display( void )
 }
 
 
-static void Reshape( int width, int height )
+static void Reshape( int w, int h )
 {
-   glViewport( 0, 0, width, height );
-   glMatrixMode( GL_PROJECTION );
+   glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+   glMatrixMode(GL_PROJECTION);
    glLoadIdentity();
-   glOrtho( -1.5, 1.5, -1.0, 1.0, -1.0, 1.0 );
-   glMatrixMode( GL_MODELVIEW );
+   
+   glMatrixMode(GL_MODELVIEW);
    glLoadIdentity();
+   glTranslatef (-0.5f, -0.5f, -5.0f);
 }
 
 
@@ -198,7 +200,7 @@ int main( int argc, char *argv[] )
    glutInitDisplayMode( GLUT_RGB | GLUT_DOUBLE );
 
    glutCreateWindow(argv[0]);
-
+   glutReshapeFunc(Reshape);
 
    Initialize(argv[1]);
    glEnable(GL_DEPTH_TEST);
