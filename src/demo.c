@@ -12,7 +12,7 @@
 #include <float.h>
 #define GL_GLEXT_LEGACY
 #include <GL/gl.h>
-#include <GL/glut.h>
+#include <GL/freeglut.h>
 
 
 static float Rot = 0;

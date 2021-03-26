@@ -7,8 +7,7 @@
 /* Computes the optimal relaxation coefficient omega for the SOR iteration */
 double _omega(const unsigned int n){
 	
-	double pi = acos(-1);
-	double rho = cos(pi/(n));
+	double rho = cos(M_PI/(n));
 	double omega = 0.25*2.0/(1+sqrt(1-pow(rho,2)));
 	
 	return omega;

@@ -2,8 +2,7 @@
 IDIR =../include
 LDIR =../lib/freeglut/x64
 CC=gcc
-CFLAGS_MAIN= -O3 -I$(IDIR)
-CFLAGS_DEMO= -O3 -I$(IDIR) -L$(LDIR) -Wl,--subsystem,windows
+CFLAGS= -O3 -I$(IDIR)
 
 ODIR=obj
 BDIR=../build
@@ -21,13 +20,11 @@ MAIN_OBJ = $(patsubst %,$(ODIR)/%,$(_MAIN_OBJ))
 _DEMO_OBJ = demo.o
 DEMO_OBJ = $(patsubst %,$(ODIR)/%,$(_DEMO_OBJ))
 
-
 $(ODIR)/%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS_MAIN)
-
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(BDIR)/main: $(MAIN_OBJ)
-	$(CC) -o $@ $^ $(CFLAGS_MAIN) $(MAIN_LIBS)
+	$(CC) -o $@ $^ $(CFLAGS) $(MAIN_LIBS)
 
-$(BDIR)/demo: $(DEMO_OBJ)
-	gcc -o $(BDIR)/demo.exe $(DEMO_OBJ) -L"..\lib\freeglut\x64" -lfreeglut -lopengl32 -Wl,--subsystem,windows
+demo: $(DEMO_OBJ)
+	$(CC)  -o $(BDIR)/$@ $^ $(CFLAGS) $(DEMO_LIBS)

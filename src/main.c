@@ -53,13 +53,17 @@ int main(int argc, char *argv[]){
 	Then save the solution to file
 */
 static void solve0(){
+	const char *name = "Mixed";
+	
+	bvp_t *bvp = bvp_create(n, &mix, &zero, NM_TRUE,NM_FALSE,NM_TRUE,NM_FALSE);
+	int i = solve_poisson_bvp(bvp);
+	printf("%s finished after %d iterations\n", name, i);
 
-
-	bvp_t *bvp;
-	bvp_create(&bvp, n, &mix, &zero, NM_TRUE,NM_FALSE,NM_TRUE,NM_FALSE);
-	solve_poisson_bvp(bvp);
-	print_solution_to_file(bvp,"./solutions/Mixed.txt");
-	bvp_free(bvp);
+	print_solution_to_file(bvp, name);
+	create_gnuplot_data(bvp, name);
+	
+	bvp_destroy(bvp);
+	bvp = NULL;
 }
 
 /*
@@ -67,13 +71,18 @@ static void solve0(){
 	Then save the solution to file
 */
 static void solve1(){
+	char *name = "Dirichlet1";
 
+	
+	bvp_t *bvp = bvp_create( n, &phi, &g1, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
+	int i = solve_poisson_bvp(bvp);
+	printf("%s finished after %d iterations\n", name, i);
 
-	bvp_t *bvp;
-	bvp_create(&bvp, n, &phi, &g1, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	solve_poisson_bvp(bvp);
-	print_solution_to_file(bvp,"solutions/Dirichlet1.txt");
-	bvp_free(bvp);
+	print_solution_to_file(bvp, name);
+	create_gnuplot_data(bvp, name);
+
+	bvp_destroy(bvp);
+	bvp = NULL;
 }
 
 /*
@@ -81,13 +90,18 @@ static void solve1(){
 	Then save the solution to file
 */
 static void solve2(){
-	
+	char *name = "Dirichlet2";
 
-	bvp_t *bvp;
-	bvp_create(&bvp, n, &phi, &g2, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	solve_poisson_bvp(bvp);
-	print_solution_to_file(bvp,"solutions/Dirichlet2.txt");
-	bvp_free(bvp);
+	
+	bvp_t *bvp = bvp_create(n, &phi, &g2, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
+	int i = solve_poisson_bvp(bvp);
+	printf("%s finished after %d iterations\n", name, i);
+
+	print_solution_to_file(bvp, name);
+	create_gnuplot_data(bvp, name);
+
+	bvp_destroy(bvp);
+	bvp = NULL;
 }
 
 /*
@@ -96,14 +110,20 @@ static void solve2(){
 	Then save the solution to file
 */
 static void solve3(){
+	char *name = "Neumann1";
 
-	bvp_t *bvp;
-	bvp_create(&bvp, n, &zero, &g1, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	solve_poisson_bvp(bvp);
+	
+	bvp_t *bvp = bvp_create(n, &zero, &g1, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
+	int i = solve_poisson_bvp(bvp);
+	printf("%s finished after %d iterations\n", name, i);
 	double delta_t = get_value_at(bvp,0,0);
 	shift_solution(bvp, -1*delta_t);
-	print_solution_to_file(bvp,"solutions/Neumann1.txt");
-	bvp_free(bvp);
+
+	print_solution_to_file(bvp, name);
+	create_gnuplot_data(bvp, name);
+
+	bvp_destroy(bvp);
+	bvp = NULL;
 }
 
 /*
@@ -112,12 +132,18 @@ static void solve3(){
 	Then save the solution to file
 */
 static void solve4(){
+	char *name = "Neumann2";
+
 	
-	bvp_t *bvp;
-	bvp_create(&bvp, n, &zero, &g2, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	solve_poisson_bvp(bvp);
+	bvp_t *bvp = bvp_create(n, &zero, &g2, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
+	int i = solve_poisson_bvp(bvp);
+	printf("%s finished after %d iterations\n", name, i);
 	double delta_t = get_value_at(bvp,0,0);
 	shift_solution(bvp, -1*delta_t);
-	print_solution_to_file(bvp,"solutions/Neumann2.txt");
-	bvp_free(bvp);
+
+	print_solution_to_file(bvp, name);
+	create_gnuplot_data(bvp, name);
+
+	bvp_destroy(bvp);
+	bvp = NULL;
 }
