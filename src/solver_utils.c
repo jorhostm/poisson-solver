@@ -18,15 +18,15 @@ double _omega(const unsigned int n){
 }
 
 
-void _init_values(double* T, double (*func)(double x, double y), const unsigned int n, double* x_vals, double* y_vals, int i0, int i1, int j0, int j1){
+void _init_values(double** T, double (*func)(double x, double y), const unsigned int n, double* x_vals, double* y_vals, int i0, int i1, int j0, int j1){
 	for(int i = i0; i < i1; i++){
 		for(int j = j0; j < j1; j++){
-			T[i*n+j] = func(x_vals[i],y_vals[j]);
+			T[i][j] = func(x_vals[i], y_vals[j]);
 		}
 	}
 }
 
-void _copy_neumann_border(double* T, const unsigned int n, int dest_x0, int dest_x1, int dest_y0, int dest_y1, int src_x0, int src_x1, int src_y0, int src_y1){
+void _copy_neumann_border(double** T, const unsigned int n, int dest_x0, int dest_x1, int dest_y0, int dest_y1, int src_x0, int src_x1, int src_y0, int src_y1){
 
 	int dest_dx = dest_x1 - dest_x0 + 1;
 	int dest_dy = dest_y1 - dest_y0 + 1;
@@ -40,7 +40,7 @@ void _copy_neumann_border(double* T, const unsigned int n, int dest_x0, int dest
 
 	for(int i = 0; i < dest_dx; i++){
 		for(int j = 0; j < dest_dy; j++){
-			T[(dest_x0 + i)*n+(dest_y0 + j)] = T[(src_x0 + i)*n+(src_y0 + j)];
+			T[dest_x0 + i][dest_y0 + j] = T[src_x0 + i][src_y0 + j];
 		}
 	}
 }

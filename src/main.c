@@ -1,3 +1,7 @@
+/*
+	This file works as an example on how to use the poisson-solver functions
+	to setup, solve and save solutions to Poisson Boundary Value Problems
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -6,8 +10,13 @@
 #include <poissonsolver.h>
 #include <functions.h>
 
-static int n;
+#define MIN_N 10	// Arbitrary minimum number for discretization
 
+// Default static values
+static unsigned int n = 100;
+static unsigned int useMultiGrid = 0;
+
+// Forward declare some problems to solve
 static void solve0();
 static void solve1();
 static void solve2();
@@ -15,28 +24,38 @@ static void solve3();
 static void solve4();
 
 int main(int argc, char *argv[]){
-	
-	if(argc == 1){
-		fprintf(stderr, "Invalid number of arguments");
-		return EXIT_FAILURE;
+
+	if (argc >= 2)
+	{
+		// Get the number of discretised points along an axis
+		n = atoi(argv[1]);
+		if(n < MIN_N){
+			fprintf(stderr,"Invalid argument %s. Needs to be a positive integer > %d", argv[1], MIN_N);
+			return EXIT_FAILURE;
+		}
 	}
 
-	// Get the number of discretised points along an axis
-	n = atoi(argv[1]);
-	if(n <= 0){
-		fprintf(stderr,"Invalid argument %s", argv[1]);
-		return EXIT_FAILURE;
+	if (argc > 2)
+	{
+		// Get whether or not to use multigrids
+		useMultiGrid = atoi(argv[2]);
 	}
+	
 
 	time_t t0 = time(NULL);
 	
-	void *solve[5] = {&solve1, &solve1, &solve2, &solve3, &solve4};
+	/* 
+		Initialize array of Poisson BVP's to solve.
+		Each BVP can be solved independently of eachother.
+		Therefore, spawn a separate thread for each.
+	*/
+	void *solve[5] = {&solve0, &solve1, &solve2, &solve3, &solve4};
 	pthread_t thread[5];
 	
-	for(int i = 0; i < 1; i++){
+	for(int i = 0; i < 5; i++){
 		pthread_create( &thread[i], NULL, solve[i], NULL);
 	}
-	for(int i = 0; i < 1; i++){
+	for(int i = 0; i < 5; i++){
 		pthread_join( thread[i], NULL);
 	}
 	
@@ -56,7 +75,7 @@ static void solve0(){
 	const char *name = "Mixed";
 	
 	bvp_t *bvp = bvp_create(n, &mix, &zero, NM_TRUE,NM_FALSE,NM_TRUE,NM_FALSE);
-	int i = solve_poisson_bvp(bvp);
+	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
 	print_solution_to_file(bvp, name);
@@ -73,9 +92,8 @@ static void solve0(){
 static void solve1(){
 	char *name = "Dirichlet1";
 
-	
 	bvp_t *bvp = bvp_create( n, &phi, &g1, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	int i = solve_poisson_bvp(bvp);
+	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
 	print_solution_to_file(bvp, name);
@@ -92,9 +110,8 @@ static void solve1(){
 static void solve2(){
 	char *name = "Dirichlet2";
 
-	
 	bvp_t *bvp = bvp_create(n, &phi, &g2, NM_FALSE,NM_FALSE,NM_FALSE,NM_FALSE);
-	int i = solve_poisson_bvp(bvp);
+	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
 	print_solution_to_file(bvp, name);
@@ -114,10 +131,10 @@ static void solve3(){
 
 	
 	bvp_t *bvp = bvp_create(n, &zero, &g1, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	int i = solve_poisson_bvp(bvp);
-	printf("%s finished after %d iterations\n", name, i);
+	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	double delta_t = get_value_at(bvp,0,0);
 	shift_solution(bvp, -1*delta_t);
+	printf("%s finished after %d iterations\n", name, i);
 
 	print_solution_to_file(bvp, name);
 	create_gnuplot_data(bvp, name);
@@ -134,12 +151,11 @@ static void solve3(){
 static void solve4(){
 	char *name = "Neumann2";
 
-	
 	bvp_t *bvp = bvp_create(n, &zero, &g2, NM_TRUE,NM_TRUE,NM_TRUE,NM_TRUE);
-	int i = solve_poisson_bvp(bvp);
-	printf("%s finished after %d iterations\n", name, i);
+	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	double delta_t = get_value_at(bvp,0,0);
 	shift_solution(bvp, -1*delta_t);
+	printf("%s finished after %d iterations\n", name, i);
 
 	print_solution_to_file(bvp, name);
 	create_gnuplot_data(bvp, name);

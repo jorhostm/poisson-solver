@@ -7,101 +7,149 @@
 #include <solver_utils.h>
 
 struct bvp_t{
-    double *result;
+    double **result;
     unsigned int n;
 	double *x_val;
 	double *y_val;
     double (*phi)(double x, double y);
     double (*g)(double x, double y);
-    double *b;
+    double **b;
     int nm_x0;
     int nm_x1;
     int nm_y0;
     int nm_y1;
 };
 
-/* Copy result and interpolate*/
+/* 
+	Copy result of a coarser bvp over to a bvp with a finer grid 
+	and interpolate the rest
+*/
 static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	const int src_n = src_bvp->n;
 	const int dest_n = dest_bvp->n;
-	const double *src_r = src_bvp->result;
-	double *dest_r = dest_bvp->result;
+	double **src_r = src_bvp->result;
+	double **dest_r = dest_bvp->result;
 
 	if (src_n != dest_n/2)
 	{
 		return -1;
 	}
-	else
+	
+	/* 
+		The destination grid has 4 times the amount of points
+		Copy over the first batch of datapoints,
+		then interpolate the rest
+	*/
+	for (int i = 0; i < src_n; i++)
 	{
-		for (int i = 0; i < src_n; i++)
+		for (int j = 0; j < src_n; j++)
 		{
-			for (int j = 0; j < src_n; j++)
-			{
-				int index = i*src_n + j;
-				dest_r[2*index] = src_r[index];
-			}
-			
-		}
-
-		for (int i = 0; i < src_n-1; i++)
-		{
-			for (int j = 0; j < src_n-1; j++)
-			{
-				int i2 = 2*i;
-				int j2 = 2*j;
-
-				int mid_ind = (i2+1)*dest_n + j2+1;
-				int topleft_ind = (i2)*dest_n + j2;
-				int topright_ind = (i2+2)*dest_n + j2;
-				int botleft_ind = (i2)*dest_n + j2 + 2;
-				int botright_ind = (i2+2)*dest_n + j2+2;
-				dest_r[mid_ind] = 0.25*(dest_r[topleft_ind] + dest_r[topright_ind] + dest_r[botleft_ind] + dest_r[botright_ind]);
-			}
-			
-		}
-
-		for (int i = 0; i < src_n-1; i++)
-		{
-			for (int j = 0; j < src_n-1; j++)
-			{
-				int i2 = 2*i;
-				int j2 = 2*j;
-
-				int mid_ind = (i2+2)*dest_n + j2+1;
-				int top_ind = (i2+2)*dest_n + j2;
-				int bot_ind = (i2+2)*dest_n + j2+2;
-				int left_ind = (i2+1)*dest_n + j2+1;
-				int right_ind = (i2+3)*dest_n + j2+1;
-				dest_r[mid_ind] = 0.25*(dest_r[top_ind] + dest_r[bot_ind] + dest_r[left_ind] + dest_r[right_ind]);
-			}
-			
+			dest_r[2*i][2*j] = src_r[i][j];
 		}
 		
+	}
+
+	/* 
+		In case of Neumann boundary at x = 0, interpolate
+	*/
+	if (dest_bvp->nm_x0)
+	{
+		for (int j = 0; j < src_n-1; j++)
+		{
+			dest_r[0][2*j+1] = 0.5*(dest_r[0][2*j] + dest_r[0][2*j+2]);
+		}
+	}
+
+	/* 
+		In case of Neumann boundary at y = 0, interpolate
+	*/
+	if (dest_bvp->nm_y0)
+	{
 		for (int i = 0; i < src_n-1; i++)
 		{
-			for (int j = 0; j < src_n-1; j++)
-			{
-				int i2 = 2*i;
-				int j2 = 2*j;
-
-				int mid_ind = (i2+1)*dest_n + j2+2;
-				int topleft_ind = (i2)*dest_n + j2+1;
-				int topright_ind = (i2+2)*dest_n + j2+1;
-				int botleft_ind = (i2)*dest_n + j2 + 3;
-				int botright_ind = (i2+2)*dest_n + j2+3;
-				int top_ind = (i2+1)*dest_n + j2+1;
-				int bot_ind = (i2+1)*dest_n + j2+3;
-				int left_ind = (i2)*dest_n + j2+2;
-				int right_ind = (i2+2)*dest_n + j2+2;
-
-
-				dest_r[mid_ind] = 0.125*(dest_r[topleft_ind] + dest_r[topright_ind] + dest_r[botleft_ind] + dest_r[botright_ind]
-									+ dest_r[top_ind] + dest_r[bot_ind] + dest_r[left_ind] + dest_r[right_ind]);
-			}
-			
+			dest_r[2*i+1][0] = 0.5*(dest_r[2*i][0] + dest_r[2*i+2][0]);
 		}
+	}
 
+	/* 
+		In case of Neumann boundary at x = 1, interpolate
+	*/
+	if (dest_bvp->nm_x1)
+	{
+		const int i = src_n-1;
+		for (int j = 0; j < src_n-1; j++)
+		{
+			dest_r[2*i][2*j+1] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i][2*j+2]);
+		}
+		unsigned int n = dest_n;
+		_copy_neumann_border(dest_r, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
+	}
+
+	/* 
+		In case of Neumann boundary at y = 1, interpolate
+	*/
+	if (dest_bvp->nm_y1)
+	{
+		const int j = src_n-1;
+		for (int i = 0; i < src_n-1; i++)
+		{
+			dest_r[2*i+1][2*j] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i+2][2*j]);
+		}
+		unsigned int n = dest_n;
+		_copy_neumann_border(dest_r, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
+	}
+
+	/*
+		Second batch
+		Interpolate between the points from the first batch \
+	*/
+	for (int i = 0; i < src_n-1; i++)
+	{
+		for (int j = 0; j < src_n-1; j++)
+		{
+			double corner_sum = dest_r[2*i][2*j];	// Top-Left
+			corner_sum += dest_r[2*i+2][2*j];		// Top-Right
+			corner_sum += dest_r[2*i][2*j+2];		// Bottom-Left
+			corner_sum += dest_r[2*i+2][2*j+2];		// Bottom-Right
+			dest_r[2*i+1][2*j+1] = 0.25*corner_sum;	// Middle = Average of the 4-corner-neighbourhood
+		}
 		
+	}
+	/*
+		Third batch
+		Interpolate between the points from the first and second batch
+	*/
+	for (int i = 0; i < src_n-1; i++)
+	{
+		for (int j = 0; j < src_n-1; j++)
+		{
+			double cross_sum = dest_r[2*i+2][2*j];	// Top
+			cross_sum += dest_r[2*i+2][2*j+2];		// Botton
+			cross_sum += dest_r[2*i+1][2*j+1];		// Left
+			cross_sum += dest_r[2*i+3][2*j+1];		// Right
+			dest_r[2*i+2][2*j+1] = 0.25*cross_sum;	// Middle = Average of the 4-cross-neighbourhood
+		}
+		
+	}
+	
+	/*
+		Fourth batch
+		Interpolate between the points from the first, second and third batch
+	*/
+	for (int i = 0; i < src_n-1; i++)
+	{
+		for (int j = 0; j < src_n-1; j++)
+		{
+			double sum = dest_r[2*i][2*j+1];	// Top-Left
+			sum += dest_r[2*i+1][2*j+1];		// Top
+			sum += dest_r[2*i+2][2*j+1];		// Top-Right
+			sum += dest_r[2*i][2*j+2];			// Left
+			sum += dest_r[2*i+2][2*j+2];		// Right
+			sum += dest_r[2*i][2*j+3];			// Bottom-Left
+			sum += dest_r[2*i+1][2*j+3];		// Bottom
+			sum += dest_r[2*i+2][2*j+3];		// Bottom-Right
+			dest_r[2*i+1][2*j+2] = 0.125*sum;	// Middle = Average of 8-neighbourhood
+		}
 	}
 
 	return 0;
@@ -113,22 +161,22 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 static int sor(bvp_t *bvp){
 	
 	const unsigned int n = bvp->n;
-	double *T = bvp->result;
-	const double *b = bvp->b;
+	double **T = bvp->result;
+	double **b = bvp->b;
 	double h = 1.0/((double) n - 1);
-	register double h2 = h*h;
-	register double omega = _omega(n);
+	double h2 = h*h;
+	double omega = _omega(n);
 
 	/* Relative tolerence and relative residual*/
-	const double reltol = 1e-6;
+	const double reltol = 1e-5;
     double rel_res = 1.0;
 
     int iterations = 0;
 
-	register const unsigned int nm_x0 = bvp->nm_x0;
-	register const unsigned int nm_x1 = bvp->nm_x1;
-	register const unsigned int nm_y0 = bvp->nm_y0;
-	register const unsigned int nm_y1 = bvp->nm_y1;
+	const unsigned int nm_x0 = bvp->nm_x0;
+	const unsigned int nm_x1 = bvp->nm_x1;
+	const unsigned int nm_y0 = bvp->nm_y0;
+	const unsigned int nm_y1 = bvp->nm_y1;
 
     
     while (rel_res > reltol){
@@ -154,8 +202,6 @@ static int sor(bvp_t *bvp){
 
             for (int j = 1; j < n-1; j++){
 
-				int index = i*n + j; // Current point index
-
 				int a0 = 1;	// 	T(i,j-1)
             	int a2 = 1; // 	T(i,j+1)
 
@@ -171,14 +217,14 @@ static int sor(bvp_t *bvp){
                 }
 
 				/* Compute the residual */
-                double R = a0*T[i*n+j-1] + a1*T[(i-1)*n+j] + a2*T[i*n+j+1] + a3*T[(i+1)*n+j] - 4*T[index] - h2*b[index];
+                double R = a0*T[i][j-1] + a1*T[i-1][j] + a2*T[i][j+1] + a3*T[i+1][j] - 4*T[i][j] - h2*b[i][j];
                 /* Apply relaxation factor */
 				double dT = omega*0.25*R;
                 /* Add the residual to the solution */
-				T[index] += dT;
+				T[i][j] += dT;
                 
 				
-				T_sum += fabs(T[index]);
+				T_sum += fabs(T[i][j]);
 				dT_sum += fabs(dT);
 
             }
@@ -191,31 +237,30 @@ static int sor(bvp_t *bvp){
     return iterations;  
 }
 
-int solve_poisson_bvp(bvp_t *bvp){
-	int useMultiGrid = 0;
+int solve_poisson_bvp(bvp_t *bvp, unsigned int useMultiGrid){
 	int n = bvp->n;
+	int iterations = 0;
 	
-	if(n > 100 && n % 2 == 0 && useMultiGrid){
+	if(n >= 256 && n % 2 == 0 && useMultiGrid){
 		bvp_t *coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_x0, bvp->nm_x1,bvp->nm_y0,bvp->nm_y1);
-		solve_poisson_bvp(coarse_bvp);
+		iterations += solve_poisson_bvp(coarse_bvp, --useMultiGrid);
 		bvpcpy(coarse_bvp, bvp);
-		create_gnuplot_data(bvp,"Dirichlet3");
 		bvp_destroy(coarse_bvp);
 	}
-	int it = sor(bvp);
+	iterations += sor(bvp);
 	
 	if (bvp->nm_x0) _copy_neumann_border(bvp->result, n, 0,0,0,n-1, 1,1,0,n-1);
 	if (bvp->nm_x1) _copy_neumann_border(bvp->result, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
 	if (bvp->nm_y0) _copy_neumann_border(bvp->result, n, 0,n-1,0,0, 0,n-1,1,1);
 	if (bvp->nm_y1) _copy_neumann_border(bvp->result, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
 
-	return it;
+	return iterations;
 }
 
 
 void print_solution_to_file(bvp_t *bvp, const char *name){
 	int n = bvp->n;
-	double *result = bvp->result;
+	double **result = bvp->result;
 
 	mkdir("solutions");
 	mkdir("solutions/opengl");
@@ -236,7 +281,7 @@ void print_solution_to_file(bvp_t *bvp, const char *name){
     for (int i = 0; i < n; i++){
             for (int j = 0; j < n; j++){
                 
-            	fprintf(f, "\n%f",result[i*n+j]);
+            	fprintf(f, "\n%f",result[i][j]);
                 
             }
         }
@@ -247,12 +292,13 @@ void print_solution_to_file(bvp_t *bvp, const char *name){
 
 void create_gnuplot_data(bvp_t *bvp, const char *name){
 	const unsigned int n = bvp->n;
-	const double *result = bvp->result;
+	double **result = bvp->result;
 	const double *x_vals = bvp->x_val;
 	const double *y_vals = bvp->y_val;
 	
 	mkdir("solutions");
 	mkdir("solutions/gnuplot");
+	mkdir("solutions/gnuplot/images");
 	char filename[50];
 	sprintf(filename,"solutions/gnuplot/%s.dat", name);
 	
@@ -268,19 +314,18 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
     for (int i = 0; i < n; i++){
             for (int j = 0; j < n; j++){
                 
-            	fprintf(f, "%f %f %f\n",x_vals[i], y_vals[j], result[i*n+j]);
+            	fprintf(f, "%f %f %f\n",x_vals[i], y_vals[j], result[i][j]);
                 
             }
         }
 
     fclose(f);
-
 }
 
 // Finds the value of T(x,y) using bilinear interpolation
 double get_value_at(bvp_t *bvp, const double x, const double y){
 
-	double *result = bvp->result;
+	double **result = bvp->result;
 	int n = bvp->n;
 
 	// Domain check
@@ -289,8 +334,8 @@ double get_value_at(bvp_t *bvp, const double x, const double y){
     	exit(1);
 	}
 
-	double *x_values = create_linear_array(0,1,n);
-	double *y_values = x_values;
+	double *x_values = bvp->x_val;
+	double *y_values = bvp->y_val;
 
 	int i_left = 0;
 	int i_right = n-1;
@@ -334,10 +379,10 @@ double get_value_at(bvp_t *bvp, const double x, const double y){
 	
 	}
 
-	double t11 = result[i_left*n + j_left];
-	double t21 = result[i_right*n + j_left];
-	double t12 = result[i_left*n + j_right];
-	double t22 = result[i_right*n + j_right];
+	double t11 = result[i_left][j_left];
+	double t21 = result[i_right][j_left];
+	double t12 = result[i_left][j_right];
+	double t22 = result[i_right][j_right];
 
 	double h = x_values[1] - x_values[0];
 
@@ -351,18 +396,16 @@ double get_value_at(bvp_t *bvp, const double x, const double y){
 
 	double t_xy = a11 + a21 * x_normalised + a12 * y_normalised + a22 * x_normalised * y_normalised;
 
-	free(x_values);
-	//free(y_values);
 	return t_xy;
 }
 
 void shift_solution(bvp_t *bvp, const double delta_t){
 
-	double *result = bvp->result;
+	double *result = bvp->result[0];
 	int n = bvp->n;
-	n = n*n;
+	int n2 = n*n;
 	
-	for (int i = 0; i < n; i++){
+	for (int i = 0; i < n2; i++){
 
 		result[i] += delta_t;
 
@@ -371,8 +414,7 @@ void shift_solution(bvp_t *bvp, const double delta_t){
 
 bvp_t *bvp_create(const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
 	bvp_t *bvp = malloc(sizeof(bvp_t));
-
-	bvp->result = calloc(n*n,sizeof(double));
+	
 	bvp->n = n;
 	bvp->phi = phi;
 	bvp->g = g;
@@ -389,7 +431,22 @@ bvp_t *bvp_create(const unsigned int n, double (*phi)(double x, double y),double
 	bvp->y_val = y;
 
 	// Initialize the RHS
+	double *datapoints = calloc(n*n,sizeof(double));
+	bvp->b = calloc(n, sizeof(double*));
+	for (int i = 0; i < n; i++)
+	{
+		bvp->b[i] = datapoints + i*n;
+	}
 	_init_values(bvp->b,g,n,x,y,0,n,0,n);
+
+	// Initialize the 2D solution array
+	datapoints = calloc(n*n,sizeof(double));
+	bvp->result = calloc(n, sizeof(double*));
+	for (int i = 0; i < n; i++)
+	{
+		bvp->result[i] = datapoints + i*n;
+	}
+	
 	
 	// Initialize the boundaries
 	if(!neumann_x0) _init_values(bvp->result,phi,n,x,y,0,n,0,1);
@@ -401,12 +458,15 @@ bvp_t *bvp_create(const unsigned int n, double (*phi)(double x, double y),double
 }
 
 void bvp_destroy(bvp_t *bvp){
+	free(bvp->result[0]);
 	free(bvp->result);
 	bvp->result = NULL;
 
 	free(bvp->x_val);
 	bvp->x_val = NULL;
+	bvp->y_val = NULL;
 
+	free(bvp->b[0]);
 	free(bvp->b);
 	bvp->b = NULL;
 
