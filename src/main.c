@@ -30,18 +30,18 @@ int main(int argc, char *argv[]){
 
 	time_t t0 = time(NULL);
 	
-	void *solve[5] = {&solve0, &solve1, &solve2, &solve3, &solve4};
+	void *solve[5] = {&solve1, &solve1, &solve2, &solve3, &solve4};
 	pthread_t thread[5];
 	
-	for(int i = 0; i < 5; i++){
+	for(int i = 0; i < 1; i++){
 		pthread_create( &thread[i], NULL, solve[i], NULL);
 	}
-	for(int i = 0; i < 5; i++){
+	for(int i = 0; i < 1; i++){
 		pthread_join( thread[i], NULL);
 	}
 	
 	time_t t = time(NULL) - t0;
-	printf("Time elapsed: %d seconds\n", t);
+	printf("Time elapsed: %lld seconds\n", t);
 
 	return EXIT_SUCCESS;
 }

@@ -4,20 +4,24 @@
 
 #include <solver_utils.h>
 
-/* Computes the optimal relaxation coefficient omega for the SOR iteration */
+/* 
+	Computes the theoretical optimal relaxation factor omega for the SOR iteration method.
+	Works for Laplace and Poisson equations in a rectangular domain.
+	In this case the domain is a n-by-n grid with x,y = [0, 1].
+*/
 double _omega(const unsigned int n){
 	
-	double rho = cos(M_PI/(n));
-	double omega = 0.25*2.0/(1+sqrt(1-pow(rho,2)));
+	double rho = cos(M_PI/(n-1));
+	double omega = 2.0/(1.0+sqrt(1.0-pow(rho,2)));
 	
 	return omega;
 }
 
 
-void _init_values(double* T, double (*fun)(double x, double y), const unsigned int n, double* x, double* y, int i0, int i1, int j0, int j1){
+void _init_values(double* T, double (*func)(double x, double y), const unsigned int n, double* x_vals, double* y_vals, int i0, int i1, int j0, int j1){
 	for(int i = i0; i < i1; i++){
 		for(int j = j0; j < j1; j++){
-			T[i*n+j] = fun(x[i],y[j]);
+			T[i*n+j] = func(x_vals[i],y_vals[j]);
 		}
 	}
 }

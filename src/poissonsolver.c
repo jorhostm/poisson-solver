@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <unistd.h>
 
 #include <poissonsolver.h>
 #include <solver_utils.h>
@@ -19,45 +20,121 @@ struct bvp_t{
     int nm_y1;
 };
 
+/* Copy result and interpolate*/
+static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
+	const int src_n = src_bvp->n;
+	const int dest_n = dest_bvp->n;
+	const double *src_r = src_bvp->result;
+	double *dest_r = dest_bvp->result;
 
-
-// SOR iterative solution
-static int sor(bvp_t *bvp){
-	unsigned int n = bvp->n;
-	double *T = bvp->result;
-	double *b = bvp->b;
-	double h = 1.0/((double) n - 1);
-	register double h2 = h*h;
-
-	double *h2b = malloc(n*n*sizeof(double));
-	for (int i = 1; i < n-1; i++)
+	if (src_n != dest_n/2)
 	{
-		for (int j = 1; j < n-1; j++)
+		return -1;
+	}
+	else
+	{
+		for (int i = 0; i < src_n; i++)
 		{
-			h2b[i*n+j] = h2*b[i*n+j];
+			for (int j = 0; j < src_n; j++)
+			{
+				int index = i*src_n + j;
+				dest_r[2*index] = src_r[index];
+			}
+			
+		}
+
+		for (int i = 0; i < src_n-1; i++)
+		{
+			for (int j = 0; j < src_n-1; j++)
+			{
+				int i2 = 2*i;
+				int j2 = 2*j;
+
+				int mid_ind = (i2+1)*dest_n + j2+1;
+				int topleft_ind = (i2)*dest_n + j2;
+				int topright_ind = (i2+2)*dest_n + j2;
+				int botleft_ind = (i2)*dest_n + j2 + 2;
+				int botright_ind = (i2+2)*dest_n + j2+2;
+				dest_r[mid_ind] = 0.25*(dest_r[topleft_ind] + dest_r[topright_ind] + dest_r[botleft_ind] + dest_r[botright_ind]);
+			}
+			
+		}
+
+		for (int i = 0; i < src_n-1; i++)
+		{
+			for (int j = 0; j < src_n-1; j++)
+			{
+				int i2 = 2*i;
+				int j2 = 2*j;
+
+				int mid_ind = (i2+2)*dest_n + j2+1;
+				int top_ind = (i2+2)*dest_n + j2;
+				int bot_ind = (i2+2)*dest_n + j2+2;
+				int left_ind = (i2+1)*dest_n + j2+1;
+				int right_ind = (i2+3)*dest_n + j2+1;
+				dest_r[mid_ind] = 0.25*(dest_r[top_ind] + dest_r[bot_ind] + dest_r[left_ind] + dest_r[right_ind]);
+			}
+			
 		}
 		
-	}
-	
+		for (int i = 0; i < src_n-1; i++)
+		{
+			for (int j = 0; j < src_n-1; j++)
+			{
+				int i2 = 2*i;
+				int j2 = 2*j;
 
+				int mid_ind = (i2+1)*dest_n + j2+2;
+				int topleft_ind = (i2)*dest_n + j2+1;
+				int topright_ind = (i2+2)*dest_n + j2+1;
+				int botleft_ind = (i2)*dest_n + j2 + 3;
+				int botright_ind = (i2+2)*dest_n + j2+3;
+				int top_ind = (i2+1)*dest_n + j2+1;
+				int bot_ind = (i2+1)*dest_n + j2+3;
+				int left_ind = (i2)*dest_n + j2+2;
+				int right_ind = (i2+2)*dest_n + j2+2;
+
+
+				dest_r[mid_ind] = 0.125*(dest_r[topleft_ind] + dest_r[topright_ind] + dest_r[botleft_ind] + dest_r[botright_ind]
+									+ dest_r[top_ind] + dest_r[bot_ind] + dest_r[left_ind] + dest_r[right_ind]);
+			}
+			
+		}
+
+		
+	}
+
+	return 0;
+}
+
+/*
+ Solve the BVP using the Successive Over-Relaxation iterative method
+*/
+static int sor(bvp_t *bvp){
+	
+	const unsigned int n = bvp->n;
+	double *T = bvp->result;
+	const double *b = bvp->b;
+	double h = 1.0/((double) n - 1);
+	register double h2 = h*h;
 	register double omega = _omega(n);
 
-	register double reltol = 0.000001;
-
+	/* Relative tolerence and relative residual*/
+	const double reltol = 1e-6;
     double rel_res = 1.0;
 
     int iterations = 0;
 
-	register int nm_x0 = bvp->nm_x0;
-	register int nm_x1 = bvp->nm_x1;
-	register int nm_y0 = bvp->nm_y0;
-	register int nm_y1 = bvp->nm_y1;
+	register const unsigned int nm_x0 = bvp->nm_x0;
+	register const unsigned int nm_x1 = bvp->nm_x1;
+	register const unsigned int nm_y0 = bvp->nm_y0;
+	register const unsigned int nm_y1 = bvp->nm_y1;
 
     
     while (rel_res > reltol){
         
-		double Tmax = 0.0;
-		double dTmax = 0.0;
+		double T_sum = reltol; // T_sum != 0
+		double dT_sum = 0.0;
         
 		for (int i = 1; i < n-1; i++){
 
@@ -77,7 +154,7 @@ static int sor(bvp_t *bvp){
 
             for (int j = 1; j < n-1; j++){
 
-				int index = i*n + j;
+				int index = i*n + j; // Current point index
 
 				int a0 = 1;	// 	T(i,j-1)
             	int a2 = 1; // 	T(i,j+1)
@@ -92,32 +169,40 @@ static int sor(bvp_t *bvp){
                 	a0 = 2;
                 	a2 = 0;
                 }
+
 				/* Compute the residual */
-                double R = a0*T[i*n+j-1] + a1*T[(i-1)*n+j] - 4*T[index] + a2*T[i*n+j+1] + a3*T[(i+1)*n+j] - h2b[index];
-                /* Apply relaxation coefficient */
-				double dT = omega*R;
+                double R = a0*T[i*n+j-1] + a1*T[(i-1)*n+j] + a2*T[i*n+j+1] + a3*T[(i+1)*n+j] - 4*T[index] - h2*b[index];
+                /* Apply relaxation factor */
+				double dT = omega*0.25*R;
                 /* Add the residual to the solution */
 				T[index] += dT;
                 
-				/* Update the maximum value and residual */
-				Tmax = fmax(fabs(T[index]), Tmax);
-				dTmax = fmax(fabs(dT), dTmax);
+				
+				T_sum += fabs(T[index]);
+				dT_sum += fabs(dT);
 
             }
         }
 		
-        rel_res = dTmax/Tmax;
+        rel_res = dT_sum/T_sum;
        	
         iterations++;
     } 
-    
-	free(h2b);
     return iterations;  
 }
 
 int solve_poisson_bvp(bvp_t *bvp){
-	int it = sor(bvp);
+	int useMultiGrid = 0;
 	int n = bvp->n;
+	
+	if(n > 100 && n % 2 == 0 && useMultiGrid){
+		bvp_t *coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_x0, bvp->nm_x1,bvp->nm_y0,bvp->nm_y1);
+		solve_poisson_bvp(coarse_bvp);
+		bvpcpy(coarse_bvp, bvp);
+		create_gnuplot_data(bvp,"Dirichlet3");
+		bvp_destroy(coarse_bvp);
+	}
+	int it = sor(bvp);
 	
 	if (bvp->nm_x0) _copy_neumann_border(bvp->result, n, 0,0,0,n-1, 1,1,0,n-1);
 	if (bvp->nm_x1) _copy_neumann_border(bvp->result, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
@@ -127,9 +212,13 @@ int solve_poisson_bvp(bvp_t *bvp){
 	return it;
 }
 
+
 void print_solution_to_file(bvp_t *bvp, const char *name){
 	int n = bvp->n;
 	double *result = bvp->result;
+
+	mkdir("solutions");
+	mkdir("solutions/opengl");
 
 	char filename[50];
 	sprintf(filename,"solutions/opengl/%s.dat", name);
@@ -144,10 +233,10 @@ void print_solution_to_file(bvp_t *bvp, const char *name){
 	}
 
     fprintf(f, "%d %d", n, n);
-    for (int j = 0; j < n; j++){
-            for (int i = 0; i < n; i++){
+    for (int i = 0; i < n; i++){
+            for (int j = 0; j < n; j++){
                 
-            	fprintf(f, "\n%f",result[j*n+i]);
+            	fprintf(f, "\n%f",result[i*n+j]);
                 
             }
         }
@@ -157,11 +246,13 @@ void print_solution_to_file(bvp_t *bvp, const char *name){
 }
 
 void create_gnuplot_data(bvp_t *bvp, const char *name){
-	int n = bvp->n;
-	double *result = bvp->result;
-	double *x = bvp->x_val;
-	double *y = bvp->y_val;
+	const unsigned int n = bvp->n;
+	const double *result = bvp->result;
+	const double *x_vals = bvp->x_val;
+	const double *y_vals = bvp->y_val;
 	
+	mkdir("solutions");
+	mkdir("solutions/gnuplot");
 	char filename[50];
 	sprintf(filename,"solutions/gnuplot/%s.dat", name);
 	
@@ -174,10 +265,10 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
     	exit(1);
 	}
 
-    for (int j = 0; j < n; j++){
-            for (int i = 0; i < n; i++){
+    for (int i = 0; i < n; i++){
+            for (int j = 0; j < n; j++){
                 
-            	fprintf(f, "%f %f %f\n",x[j], y[i], result[j*n+i]);
+            	fprintf(f, "%f %f %f\n",x_vals[i], y_vals[j], result[i*n+j]);
                 
             }
         }
