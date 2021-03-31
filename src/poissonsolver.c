@@ -22,21 +22,25 @@ struct bvp_t{
 
 /* 
 	Copy result of a coarser bvp over to a bvp with a finer grid 
-	and interpolate the rest
+	and interpolate the remaining datapoints
 */
 static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
+	
 	const int src_n = src_bvp->n;
 	const int dest_n = dest_bvp->n;
 	double **src_r = src_bvp->result;
 	double **dest_r = dest_bvp->result;
+	const int isOdd = dest_n % 2;
 
-	if (src_n != dest_n/2)
+
+	if (src_n != dest_n/2 + isOdd)
 	{
 		return -1;
 	}
 	
 	/* 
-		The destination grid has 4 times the amount of points
+		The destination grid has 4 times the amount of points as the source grid if even,
+		not as much if the destination grid is odd.
 		Copy over the first batch of datapoints,
 		then interpolate the rest
 	*/
@@ -48,9 +52,10 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		}
 		
 	}
-
+	
 	/* 
-		In case of Neumann boundary at x = 0, interpolate
+		In case of Neumann boundary at x = 0, 
+		interpolate the remaining datapoints on that boundary
 	*/
 	if (dest_bvp->nm_x0)
 	{
@@ -61,7 +66,8 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	}
 
 	/* 
-		In case of Neumann boundary at y = 0, interpolate
+		In case of Neumann boundary at y = 0, 
+		interpolate the remaining datapoints on that boundary
 	*/
 	if (dest_bvp->nm_y0)
 	{
@@ -72,7 +78,8 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	}
 
 	/* 
-		In case of Neumann boundary at x = 1, interpolate
+		In case of Neumann boundary at x = 1, 
+		interpolate the remaining datapoints on that boundary
 	*/
 	if (dest_bvp->nm_x1)
 	{
@@ -81,12 +88,18 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		{
 			dest_r[2*i][2*j+1] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i][2*j+2]);
 		}
-		unsigned int n = dest_n;
-		_copy_neumann_border(dest_r, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
+		
+		// If the destination grid is even
+		if ((dest_n-1) % 2)
+		{
+			unsigned int n = dest_n;
+			_copy_neumann_border(dest_r, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
+		}
 	}
 
 	/* 
-		In case of Neumann boundary at y = 1, interpolate
+		In case of Neumann boundary at y = 1, 
+		interpolate the remaining datapoints on that boundary
 	*/
 	if (dest_bvp->nm_y1)
 	{
@@ -95,13 +108,18 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		{
 			dest_r[2*i+1][2*j] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i+2][2*j]);
 		}
-		unsigned int n = dest_n;
-		_copy_neumann_border(dest_r, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
+
+		// If the destination grid is even
+		if ((dest_n-1) % 2)
+		{
+			unsigned int n = dest_n;
+			_copy_neumann_border(dest_r, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
+		}
 	}
 
 	/*
 		Second batch
-		Interpolate between the points from the first batch \
+		Interpolate between the points from the first batch
 	*/
 	for (int i = 0; i < src_n-1; i++)
 	{
@@ -118,9 +136,11 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	/*
 		Third batch
 		Interpolate between the points from the first and second batch
+		Account for odd numbered grid size, so it does not go out of bounds
 	*/
-	for (int i = 0; i < src_n-1; i++)
+	for (int i = 0; i < src_n-1-isOdd; i++)
 	{
+		
 		for (int j = 0; j < src_n-1; j++)
 		{
 			double cross_sum = dest_r[2*i+2][2*j];	// Top
@@ -135,10 +155,11 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	/*
 		Fourth batch
 		Interpolate between the points from the first, second and third batch
+		Account for odd numbered grid size, so it does not go out of bounds
 	*/
 	for (int i = 0; i < src_n-1; i++)
 	{
-		for (int j = 0; j < src_n-1; j++)
+		for (int j = 0; j < src_n-1-isOdd; j++)
 		{
 			double sum = dest_r[2*i][2*j+1];	// Top-Left
 			sum += dest_r[2*i+1][2*j+1];		// Top
@@ -181,7 +202,7 @@ static int sor(bvp_t *bvp){
     
     while (rel_res > reltol){
         
-		double T_sum = reltol; // T_sum != 0
+		double T_sum = 0.0;
 		double dT_sum = 0.0;
         
 		for (int i = 1; i < n-1; i++){
@@ -241,9 +262,9 @@ int solve_poisson_bvp(bvp_t *bvp, unsigned int useMultiGrid){
 	int n = bvp->n;
 	int iterations = 0;
 	
-	if(n >= 256 && n % 2 == 0 && useMultiGrid){
-		bvp_t *coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_x0, bvp->nm_x1,bvp->nm_y0,bvp->nm_y1);
-		iterations += solve_poisson_bvp(coarse_bvp, --useMultiGrid);
+	if(n > 200 && useMultiGrid){
+		bvp_t *coarse_bvp = bvp_create(n/2 + n%2, bvp->phi,bvp->g,bvp->nm_x0, bvp->nm_x1,bvp->nm_y0,bvp->nm_y1);
+		iterations += solve_poisson_bvp(coarse_bvp, useMultiGrid);
 		bvpcpy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
 	}
@@ -298,7 +319,7 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
 	
 	mkdir("solutions");
 	mkdir("solutions/gnuplot");
-	mkdir("solutions/gnuplot/images");
+
 	char filename[50];
 	sprintf(filename,"solutions/gnuplot/%s.dat", name);
 	
@@ -320,6 +341,13 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
         }
 
     fclose(f);
+	if (n < 256){
+		mkdir("solutions/gnuplot/images");
+		char command[20];
+		sprintf(command,"gnuplot -c surface_plot.p %s", name);
+		system(command);
+	}
+
 }
 
 // Finds the value of T(x,y) using bilinear interpolation

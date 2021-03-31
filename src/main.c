@@ -15,6 +15,7 @@
 // Default static values
 static unsigned int n = 100;
 static unsigned int useMultiGrid = 0;
+static unsigned int saveData = 0;
 
 // Forward declare some problems to solve
 static void solve0();
@@ -35,10 +36,16 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	if (argc > 2)
+	if (argc >= 3)
 	{
 		// Get whether or not to use multigrids
 		useMultiGrid = atoi(argv[2]);
+	}
+
+	if (argc >= 4)
+	{
+		// Get whether or not to save the computed data to file
+		saveData = atoi(argv[3]);
 	}
 	
 
@@ -78,8 +85,10 @@ static void solve0(){
 	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
-	print_solution_to_file(bvp, name);
-	create_gnuplot_data(bvp, name);
+	if (saveData){
+		print_solution_to_file(bvp, name);
+		create_gnuplot_data(bvp, name);
+	}
 	
 	bvp_destroy(bvp);
 	bvp = NULL;
@@ -96,8 +105,10 @@ static void solve1(){
 	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
-	print_solution_to_file(bvp, name);
-	create_gnuplot_data(bvp, name);
+	if (saveData){
+		print_solution_to_file(bvp, name);
+		create_gnuplot_data(bvp, name);
+	}
 
 	bvp_destroy(bvp);
 	bvp = NULL;
@@ -114,8 +125,10 @@ static void solve2(){
 	int i = solve_poisson_bvp(bvp, useMultiGrid);
 	printf("%s finished after %d iterations\n", name, i);
 
-	print_solution_to_file(bvp, name);
-	create_gnuplot_data(bvp, name);
+	if (saveData){
+		print_solution_to_file(bvp, name);
+		create_gnuplot_data(bvp, name);
+	}
 
 	bvp_destroy(bvp);
 	bvp = NULL;
@@ -136,8 +149,10 @@ static void solve3(){
 	shift_solution(bvp, -1*delta_t);
 	printf("%s finished after %d iterations\n", name, i);
 
-	print_solution_to_file(bvp, name);
-	create_gnuplot_data(bvp, name);
+	if (saveData){
+		print_solution_to_file(bvp, name);
+		create_gnuplot_data(bvp, name);
+	};
 
 	bvp_destroy(bvp);
 	bvp = NULL;
@@ -157,8 +172,10 @@ static void solve4(){
 	shift_solution(bvp, -1*delta_t);
 	printf("%s finished after %d iterations\n", name, i);
 
-	print_solution_to_file(bvp, name);
-	create_gnuplot_data(bvp, name);
+	if (saveData){
+		print_solution_to_file(bvp, name);
+		create_gnuplot_data(bvp, name);
+	}
 
 	bvp_destroy(bvp);
 	bvp = NULL;

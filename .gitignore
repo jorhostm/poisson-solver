@@ -54,3 +54,4 @@ dkms.conf
 # Output files
 *.txt
 *.dat
+*.png
