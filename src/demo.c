@@ -80,31 +80,31 @@ static void Initialize(char *filename){
    }
 
 
-  glClearColor (0.5,0,0.5,0);
+  glClearColor (0.9,0.9,0.9, 1);
 }
 
-static void setColour(float t, float Tmax, float Tmin, float *min_colour, float *max_colour){
+static void setColour(float t){
    float dt = Tmax - Tmin;
    float tn = (t-Tmin)/dt;
-   float colours[3];
+   float r,g,b;
    
-   for(int i = 0; i < 3; i++){
-      float c = (1-tn)*min_colour[i] + tn*max_colour[i];
-      colours[i] = c;
-   }
-   glColor3f(colours[0],colours[1],colours[2]);
+   // Set red value
+   r = sqrt(tn);
+
+   // Set green value
+   g = powf(tn,3);
+   
+   // Set blue value
+   b = sinf(2*M_PI*tn);
+   
+   
+   glColor3f(r, g, b);
 }
 
 static void Display( void )
 {
 
    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-   /* draw background gradient */
-   float min_color[3] = {0,0,0};
-   float max_color[3] = {1,1,1};
-
-   
-  
    glPushMatrix();
    
    glMatrixMode( GL_PROJECTION );
@@ -118,19 +118,19 @@ static void Display( void )
    
     for(int j = 0; j < n-1; j++){
       for(int i = 0; i < n-1; i++){
-        float t1 = 2*T[i*n+j];
-        float t2 = 2*T[i*n+j+1];
-        float t3 = 2*T[(i+1)*n+j+1];
-        float t4 = 2*T[(i+1)*n+j];
+        float t1 = T[i*n+j];
+        float t2 = T[i*n+j+1];
+        float t3 = T[(i+1)*n+j+1];
+        float t4 = T[(i+1)*n+j];
 
         
-        setColour(t1, Tmax, Tmin, min_color, max_color); glVertex2f(x[i], y[j]);
+        setColour(t1); glVertex2f(x[i], y[j]);
         
-        setColour(t2, Tmax, Tmin, min_color, max_color); glVertex2f(x[i], y[j+1]);
+        setColour(t2); glVertex2f(x[i], y[j+1]);
         
-        setColour(t3, Tmax, Tmin, min_color, max_color); glVertex2f(x[i+1], y[j+1]);
+        setColour(t3); glVertex2f(x[i+1], y[j+1]);
         
-        setColour(t4, Tmax, Tmin, min_color, max_color); glVertex2f(x[i+1], y[j]);
+        setColour(t4); glVertex2f(x[i+1], y[j]);
     }
     }
 

@@ -338,15 +338,13 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
             	fprintf(f, "%f %f %f\n",x_vals[i], y_vals[j], result[i][j]);
                 
             }
+			fprintf(f, "\n");
         }
 
-    fclose(f);
-	if (n < 256){
-		mkdir("solutions/gnuplot/images");
-		char command[20];
-		sprintf(command,"gnuplot -c surface_plot.p %s", name);
-		system(command);
-	}
+	mkdir("solutions/gnuplot/images");
+	char command[20];
+	sprintf(command,"gnuplot -c surface_plot.p %s", name);
+	system(command);
 
 }
 
