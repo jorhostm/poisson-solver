@@ -7,6 +7,7 @@
 #include <solver_utils.h>
 
 struct bvp_t{
+	double *datapoints;
     double **result;
     unsigned int n;
 	double *x_val;
@@ -14,33 +15,28 @@ struct bvp_t{
     double (*phi)(double x, double y);
     double (*g)(double x, double y);
     double **b;
-    int nm_x0;
-    int nm_x1;
-    int nm_y0;
-    int nm_y1;
+    int nm_flags;
 };
 
 /* 
 	Copy result of a coarser bvp over to a bvp with a finer grid 
 	and interpolate the remaining datapoints
 */
-static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
+static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
 	
 	const int src_n = src_bvp->n;
 	const int dest_n = dest_bvp->n;
 	double **src_r = src_bvp->result;
 	double **dest_r = dest_bvp->result;
-	const int isOdd = dest_n % 2;
 
 
-	if (src_n != dest_n/2 + isOdd)
+	if (src_n != dest_n/2 + 1)
 	{
 		return -1;
 	}
 	
 	/* 
-		The destination grid has 4 times the amount of points as the source grid if even,
-		not as much if the destination grid is odd.
+		The destination grid has about 4 times the amount of points as the source grid,
 		Copy over the first batch of datapoints,
 		then interpolate the rest
 	*/
@@ -57,7 +53,7 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		In case of Neumann boundary at x = 0, 
 		interpolate the remaining datapoints on that boundary
 	*/
-	if (dest_bvp->nm_x0)
+	if (dest_bvp->nm_flags & NM_X0)
 	{
 		for (int j = 0; j < src_n-1; j++)
 		{
@@ -69,7 +65,7 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		In case of Neumann boundary at y = 0, 
 		interpolate the remaining datapoints on that boundary
 	*/
-	if (dest_bvp->nm_y0)
+	if (dest_bvp->nm_flags & NM_Y0)
 	{
 		for (int i = 0; i < src_n-1; i++)
 		{
@@ -81,19 +77,12 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		In case of Neumann boundary at x = 1, 
 		interpolate the remaining datapoints on that boundary
 	*/
-	if (dest_bvp->nm_x1)
+	if (dest_bvp->nm_flags & NM_X1)
 	{
 		const int i = src_n-1;
 		for (int j = 0; j < src_n-1; j++)
 		{
 			dest_r[2*i][2*j+1] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i][2*j+2]);
-		}
-		
-		// If the destination grid is even
-		if ((dest_n-1) % 2)
-		{
-			unsigned int n = dest_n;
-			_copy_neumann_border(dest_r, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
 		}
 	}
 
@@ -101,25 +90,22 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 		In case of Neumann boundary at y = 1, 
 		interpolate the remaining datapoints on that boundary
 	*/
-	if (dest_bvp->nm_y1)
+	if (dest_bvp->nm_flags & NM_Y1)
 	{
 		const int j = src_n-1;
 		for (int i = 0; i < src_n-1; i++)
 		{
 			dest_r[2*i+1][2*j] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i+2][2*j]);
 		}
-
-		// If the destination grid is even
-		if ((dest_n-1) % 2)
-		{
-			unsigned int n = dest_n;
-			_copy_neumann_border(dest_r, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
-		}
 	}
 
 	/*
 		Second batch
 		Interpolate between the points from the first batch
+
+				◯   ◯
+		x 	:=
+				◯	◯
 	*/
 	for (int i = 0; i < src_n-1; i++)
 	{
@@ -136,9 +122,13 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	/*
 		Third batch
 		Interpolate between the points from the first and second batch
-		Account for odd numbered grid size, so it does not go out of bounds
+
+				  ◯ 
+		△ 	:=	x	x
+				  ◯
 	*/
-	for (int i = 0; i < src_n-1-isOdd; i++)
+	// Account for odd numbered grid size, so it does not go out of bounds
+	for (int i = 0; i < src_n-2; i++)
 	{
 		
 		for (int j = 0; j < src_n-1; j++)
@@ -155,11 +145,15 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 	/*
 		Fourth batch
 		Interpolate between the points from the first, second and third batch
-		Account for odd numbered grid size, so it does not go out of bounds
+
+				△ x △
+		□ 	:=	◯	◯
+				△ x △
 	*/
 	for (int i = 0; i < src_n-1; i++)
 	{
-		for (int j = 0; j < src_n-1-isOdd; j++)
+		// Account for odd numbered grid size, so it does not go out of bounds
+		for (int j = 0; j < src_n-2; j++)
 		{
 			double sum = dest_r[2*i][2*j+1];	// Top-Left
 			sum += dest_r[2*i+1][2*j+1];		// Top
@@ -179,7 +173,7 @@ static int bvpcpy(const bvp_t *src_bvp, bvp_t *dest_bvp){
 /*
  Solve the BVP using the Successive Over-Relaxation iterative method
 */
-static int sor(bvp_t *bvp){
+static int sor(bvp_t bvp, const double reltol){
 	
 	const unsigned int n = bvp->n;
 	double **T = bvp->result;
@@ -188,16 +182,16 @@ static int sor(bvp_t *bvp){
 	double h2 = h*h;
 	double omega = _omega(n);
 
-	/* Relative tolerence and relative residual*/
-	const double reltol = 1e-5;
+	/* Relative residual*/
+	
     double rel_res = 1.0;
 
     int iterations = 0;
 
-	const unsigned int nm_x0 = bvp->nm_x0;
-	const unsigned int nm_x1 = bvp->nm_x1;
-	const unsigned int nm_y0 = bvp->nm_y0;
-	const unsigned int nm_y1 = bvp->nm_y1;
+	const unsigned int i_start 	= bvp->nm_flags & NM_X0 ? 0 : 1;
+	const unsigned int i_end 	= bvp->nm_flags & NM_X1 ? n : n-1;
+	const unsigned int j_start 	= bvp->nm_flags & NM_Y0 ? 0 : 1;
+	const unsigned int j_end 	= bvp->nm_flags & NM_Y1 ? n : n-1;
 
     
     while (rel_res > reltol){
@@ -205,46 +199,47 @@ static int sor(bvp_t *bvp){
 		double T_sum = 0.0;
 		double dT_sum = 0.0;
         
-		for (int i = 1; i < n-1; i++){
+		for (int i = i_start; i < i_end; i++){
 
 			int a1 = 1;	//	T(i-1,j)
 			int a3 = 1;	// 	T(i+1,j)
 			
 			/* Check if there is a Neumann boundary at x = 0 */
-			if(i == 1 && nm_x0){
+			if(i == 0){
 				a1 = 0;
 				a3 = 2;
 			}
 			/* Check if there is a Neumann boundary at x = 1 */
-			else if(i == n-2 && nm_x1){
+			else if(i == n-1){
 				a1 = 2;
 				a3 = 0;
 			}
 
-            for (int j = 1; j < n-1; j++){
+            for (int j = j_start; j < j_end; j++){
 
 				int a0 = 1;	// 	T(i,j-1)
             	int a2 = 1; // 	T(i,j+1)
 
 				/* Check if there is a Neumann boundary at y = 0 */
-                if(j == 1 && nm_y0){
+                if(j == 0){
                 	a0 = 0;
                 	a2 = 2;
                 }
 				/* Check if there is a Neumann boundary at y = 1 */
-                else if(j == n-2 && nm_y1){
+                else if(j == n-1){
                 	a0 = 2;
                 	a2 = 0;
                 }
-
+				
 				/* Compute the residual */
                 double R = a0*T[i][j-1] + a1*T[i-1][j] + a2*T[i][j+1] + a3*T[i+1][j] - 4*T[i][j] - h2*b[i][j];
                 /* Apply relaxation factor */
 				double dT = omega*0.25*R;
                 /* Add the residual to the solution */
 				T[i][j] += dT;
-                
 				
+				//T_sum = fmax(fabs(T[i][j]), T_sum);
+				//dT_sum = fmax(fabs(dT), dT_sum);
 				T_sum += fabs(T[i][j]);
 				dT_sum += fabs(dT);
 
@@ -258,33 +253,26 @@ static int sor(bvp_t *bvp){
     return iterations;  
 }
 
-int solve_poisson_bvp(bvp_t *bvp, unsigned int useMultiGrid){
+int solve_poisson_bvp(bvp_t bvp, unsigned int use_multigrid, const double reltol){
 	int n = bvp->n;
 	int iterations = 0;
 	
-	if(n > 200 && useMultiGrid){
-		bvp_t *coarse_bvp = bvp_create(n/2 + n%2, bvp->phi,bvp->g,bvp->nm_x0, bvp->nm_x1,bvp->nm_y0,bvp->nm_y1);
-		iterations += solve_poisson_bvp(coarse_bvp, useMultiGrid);
+	if(n >= MULTIGRID_MIN && use_multigrid){
+		bvp_t coarse_bvp = bvp_create(n/2 + 1, bvp->phi,bvp->g,bvp->nm_flags);
+		iterations += solve_poisson_bvp(coarse_bvp, use_multigrid, reltol);
 		bvpcpy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
 	}
-	iterations += sor(bvp);
 	
-	if (bvp->nm_x0) _copy_neumann_border(bvp->result, n, 0,0,0,n-1, 1,1,0,n-1);
-	if (bvp->nm_x1) _copy_neumann_border(bvp->result, n, n-1,n-1,0,n-1, n-2,n-2,0,n-1);
-	if (bvp->nm_y0) _copy_neumann_border(bvp->result, n, 0,n-1,0,0, 0,n-1,1,1);
-	if (bvp->nm_y1) _copy_neumann_border(bvp->result, n, 0,n-1,n-1,n-1, 0,n-1, n-2,n-2);
+	iterations += sor(bvp, reltol);
 
 	return iterations;
 }
 
 
-void print_solution_to_file(bvp_t *bvp, const char *name){
+void print_solution_to_file(bvp_t bvp, const char *name){
 	int n = bvp->n;
 	double **result = bvp->result;
-
-	mkdir("solutions");
-	mkdir("solutions/opengl");
 
 	char filename[50];
 	sprintf(filename,"solutions/opengl/%s.dat", name);
@@ -311,14 +299,12 @@ void print_solution_to_file(bvp_t *bvp, const char *name){
 
 }
 
-void create_gnuplot_data(bvp_t *bvp, const char *name){
+void create_gnuplot_data(bvp_t bvp, const char *name){
 	const unsigned int n = bvp->n;
 	double **result = bvp->result;
 	const double *x_vals = bvp->x_val;
 	const double *y_vals = bvp->y_val;
 	
-	mkdir("solutions");
-	mkdir("solutions/gnuplot");
 
 	char filename[50];
 	sprintf(filename,"solutions/gnuplot/%s.dat", name);
@@ -331,7 +317,7 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
     	printf("Error opening file!\n");
     	exit(1);
 	}
-
+	
     for (int i = 0; i < n; i++){
             for (int j = 0; j < n; j++){
                 
@@ -340,16 +326,12 @@ void create_gnuplot_data(bvp_t *bvp, const char *name){
             }
 			fprintf(f, "\n");
         }
-
-	mkdir("solutions/gnuplot/images");
-	char command[20];
-	sprintf(command,"gnuplot -c surface_plot.p %s", name);
-	system(command);
+	fclose(f);
 
 }
 
 // Finds the value of T(x,y) using bilinear interpolation
-double get_value_at(bvp_t *bvp, const double x, const double y){
+double get_value_at(bvp_t bvp, const double x, const double y){
 
 	double **result = bvp->result;
 	int n = bvp->n;
@@ -425,7 +407,7 @@ double get_value_at(bvp_t *bvp, const double x, const double y){
 	return t_xy;
 }
 
-void shift_solution(bvp_t *bvp, const double delta_t){
+void shift_solution(bvp_t bvp, const double delta_t){
 
 	double *result = bvp->result[0];
 	int n = bvp->n;
@@ -438,17 +420,14 @@ void shift_solution(bvp_t *bvp, const double delta_t){
 	}
 }
 
-bvp_t *bvp_create(const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int neumann_x0, int neumann_x1, int neumann_y0, int neumann_y1){
-	bvp_t *bvp = malloc(sizeof(bvp_t));
+bvp_t bvp_create(unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags){
+	bvp_t bvp = malloc(sizeof(struct bvp_t));
+	n = find_admissable(n, MULTIGRID_MIN);
 	
 	bvp->n = n;
 	bvp->phi = phi;
 	bvp->g = g;
-	bvp->b = malloc(n*n*sizeof(double));
-	bvp->nm_x0 = neumann_x0;
-	bvp->nm_x1 = neumann_x1;
-	bvp->nm_y0 = neumann_y0;
-	bvp->nm_y1 = neumann_y1;
+	bvp->nm_flags = nm_flags;
 
 	double *x = create_linear_array(0, 1, n);
 	double *y = x;
@@ -457,42 +436,43 @@ bvp_t *bvp_create(const unsigned int n, double (*phi)(double x, double y),double
 	bvp->y_val = y;
 
 	// Initialize the RHS
-	double *datapoints = calloc(n*n,sizeof(double));
+	double *rhs = calloc(n*n,sizeof(double));
 	bvp->b = calloc(n, sizeof(double*));
+
 	for (int i = 0; i < n; i++)
 	{
-		bvp->b[i] = datapoints + i*n;
+		bvp->b[i] = rhs + i*n;
 	}
 	_init_values(bvp->b,g,n,x,y,0,n,0,n);
 
-	// Initialize the 2D solution array
-	datapoints = calloc(n*n,sizeof(double));
-	bvp->result = calloc(n, sizeof(double*));
-	for (int i = 0; i < n; i++)
+	// Initialize the 2D solution array, including "ghost cells" around the boundary, to prevent out-of-bound access
+	double *datapoints = calloc((n+2)*(n+2),sizeof(double));
+	bvp->datapoints = datapoints;
+	bvp->result = calloc(n+2, sizeof(double*));
+	for (int i = 0; i < n+2; i++)
 	{
-		bvp->result[i] = datapoints + i*n;
+		bvp->result[i] = datapoints + i*(n)+1;
 	}
-	
+	(bvp->result)++;
 	
 	// Initialize the boundaries
-	if(!neumann_x0) _init_values(bvp->result,phi,n,x,y,0,n,0,1);
-	if(!neumann_x1) _init_values(bvp->result,phi,n,x,y,0,n,n-1,n);
-	if(!neumann_y0) _init_values(bvp->result,phi,n,x,y,0,1,0,n);
-	if(!neumann_y1) _init_values(bvp->result,phi,n,x,y,n-1,n,0,n);
-
+	if(!(bvp->nm_flags & NM_X0)) _init_values(bvp->result,phi,n,x,y,0,n,0,1);
+	if(!(bvp->nm_flags & NM_X1)) _init_values(bvp->result,phi,n,x,y,0,n,n-1,n);
+	if(!(bvp->nm_flags & NM_Y0)) _init_values(bvp->result,phi,n,x,y,0,1,0,n);
+	if(!(bvp->nm_flags & NM_Y1)) _init_values(bvp->result,phi,n,x,y,n-1,n,0,n);
+	
 	return bvp;
 }
 
-void bvp_destroy(bvp_t *bvp){
-	free(bvp->result[0]);
-	free(bvp->result);
+void bvp_destroy(bvp_t bvp){
+	free(bvp->datapoints);
+	free(--(bvp->result));
 	bvp->result = NULL;
 
 	free(bvp->x_val);
 	bvp->x_val = NULL;
 	bvp->y_val = NULL;
 
-	free(bvp->b[0]);
 	free(bvp->b);
 	bvp->b = NULL;
 

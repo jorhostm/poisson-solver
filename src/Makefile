@@ -1,4 +1,4 @@
-
+all: example demo
 
 IDIR =../include
 LDIR =../lib
@@ -8,40 +8,48 @@ CFLAGS= -O3 -I$(IDIR)
 BDIR=../build
 ODIR=obj
 
-MAIN_LIBS= -lm -lpthread
-DEMO_LIBS= -lfreeglut -lopengl32
+EXAMPLE_LIBS= -lm -lpthread
+DEMO_LIBS= -lglut -lGL
 
-_DEPS = poissonsolver.h functions.h solver_utils.h
+_DEPS = poissonsolver.h example.h solver_utils.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_MAIN_OBJ = main.o poissonsolver.o solver_utils.o
-MAIN_OBJ = $(patsubst %,$(ODIR)/%,$(_MAIN_OBJ))
+_EXAMPLE_OBJ = example.o poissonsolver.o solver_utils.o
+EXAMPLE_OBJ = $(patsubst %,$(ODIR)/%,$(_EXAMPLE_OBJ))
 
 _DEMO_OBJ = demo.o
 DEMO_OBJ = $(patsubst %,$(ODIR)/%,$(_DEMO_OBJ))
 
-_MAIN = main
-MAIN = $(patsubst %,$(BDIR)/%,$(_MAIN))
+_EXAMPLE = example
+EXAMPLE = $(patsubst %,$(BDIR)/%,$(_EXAMPLE))
 
 _DEMO = demo
 DEMO = $(patsubst %,$(BDIR)/%,$(_DEMO))
 
+$(ODIR):
+	mkdir -p $(ODIR)
 
-$(ODIR)/%.o: %.c $(DEPS)
+$(ODIR)/%.o: %.c $(DEPS) $(ODIR)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-$(MAIN): $(MAIN_OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(MAIN_LIBS)
+$(EXAMPLE): $(EXAMPLE_OBJ)
+	mkdir -p $(BDIR)/solutions/gnuplot/images
+	mkdir -p $(BDIR)/solutions/opengl
+	$(CC) -o $@ $^ $(CFLAGS) $(EXAMPLE_LIBS)
 
 $(DEMO): $(DEMO_OBJ)
 	$(CC)  -o $@ $^ $(CFLAGS) $(DEMO_LIBS)
 
-main: $(MAIN)
+example: $(EXAMPLE)
 demo: $(DEMO)
 
+
+
 clean:
-	rm  -f $(MAIN_OBJ) $(DEMO_OBJ) $(MAIN) $(DEMO)
+	rm  -rf $(ODIR)
 	
 	rm -rf $(BDIR)/solutions
+	rm -rf $(BDIR)/example*
+	rm -rf $(BDIR)/demo*
 
-.PHONY: clean main demo
+.PHONY: clean demo example

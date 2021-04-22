@@ -1,9 +1,3 @@
-/* $Id: paltex.c,v 1.6 2000/10/05 07:17:43 joukj Exp $ */
-
-/*
- * Paletted texture demo.  Written by Brian Paul.
- * This program is in the public domain.
- */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,10 +8,6 @@
 #include <GL/gl.h>
 #include <GL/freeglut.h>
 
-
-static float Rot = 0;
-static GLboolean Anim = 1;
-
 static float *T;
 static int n;
 static float *x;
@@ -25,9 +15,6 @@ static float *y;
 static float Tmax = FLT_MIN;
 static float Tmin = FLT_MAX;
 
-static float z = -1;
-static float fx = 0;
-static float fy = 0;
 
 static void Idle( void )
 {
@@ -157,33 +144,12 @@ static void Reshape( int w, int h )
 
 static void Key( unsigned char key, int x, int y )
 {
-   (void) x;
-   (void) y;
    switch (key) {
       case 27:
          exit(0);
-         break;
-      case 'w':
-         fy += 1;
-         break;
-      case 's':
-         fy -= 1;
-         break;
-      case 'a':
-         fx += 1;
-         break;
-      case 'd':
-         fx -= 1;
-         break;
-      case ' ':
-         Anim = !Anim;
-         if (Anim)
-            glutIdleFunc( Idle );
-         else
-            glutIdleFunc( NULL );
-         break;
+         break; 
    }
-   glutPostRedisplay();
+   
 }
 
 
@@ -208,9 +174,8 @@ int main( int argc, char *argv[] )
   
    glutKeyboardFunc( Key );
    glutDisplayFunc( Display );
-   if (Anim)
-      glutIdleFunc( Idle );
 
+   
    glutMainLoop();
 
    free(T);
