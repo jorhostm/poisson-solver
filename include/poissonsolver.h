@@ -5,7 +5,6 @@
  * @version 1.0
  * @date 2021-04-23
  * 
- * @copyright Copyright (c) 2021
  * 
  */
 
@@ -21,8 +20,9 @@
 #define NM_Y1           0x8
 #define NM_ONLY         (NM_X0 | NM_X1 | NM_Y0 | NM_Y1)
 
+#ifndef MULTIGRID_MIN
 #define MULTIGRID_MIN   200
-
+#endif
 /**
  * @brief Poisson Boundary Value Type
  */

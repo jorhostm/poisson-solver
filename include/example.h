@@ -5,7 +5,6 @@
  * @version 1.0
  * @date 2021-04-23
  * 
- * @copyright Copyright (c) 2021
  * 
  */
 
@@ -16,6 +15,8 @@
 #include <sys/time.h>
 
 #include <poissonsolver.h>
+
+const char *help_msg = " -h \t\t Display help message\n -n [int] \t Set descretisaton number\n -m \t\t Use multigrid\n -s \t\t Save solution to file\n -r [double]\t Relative tolerance (default: 1e-6)\n -p [int]\t Number of problems to solve (default: 5)\n";
 
 /**
  * @brief Parameters to be passed to a thread running solve(). Used to create, solve, correct and save the solution of a BVP
@@ -133,6 +134,6 @@ void solve( void *parameters){
 	};
 
 	bvp_destroy(bvp);
-	bvp = NULL;
+
 }
 #endif

@@ -6,13 +6,11 @@
  * @version 1.0
  * @date 2021-04-22
  * 
- * @copyright Copyright (c) 2021
  * 
  */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
 #include <pthread.h>
 #include <ctype.h>
 #include <getopt.h>
@@ -24,16 +22,21 @@
 int main(int argc, char **argv){
 	
 	// Default flags and values
-	unsigned int n = MULTIGRID_MIN;
-	unsigned int use_multigrid = 0;
-	unsigned int save_data = 0;
-	double reltol = 1e-6;
+	unsigned int n = MULTIGRID_MIN;	// Number of discretisation points for the n * n grid
+	unsigned int use_multigrid = 0;	// Whether to use multigrids or not
+	unsigned int save_data = 0;		// Whether to save the data to file
+	unsigned int np = 5;			// Number of problems to solve
+	double reltol = 1e-6;			// Relative tolerance
 
   	int c;
 	// Process the options
-	while ((c = getopt(argc, argv, "msn:r:")) != -1)
+	while ((c = getopt(argc, argv, "hmsn:r:p:")) != -1)
 		switch (c)
 		{
+		case 'h':
+			printf(help_msg);
+			return EXIT_SUCCESS;
+			break;
 		case 'm':
 			use_multigrid = 1;
 			break;
@@ -53,6 +56,13 @@ int main(int argc, char **argv){
 				fprintf(stderr,"Invalid argument %s for reltol. Needs to be a double > 0\n", optarg);
 				return EXIT_FAILURE;
 			}
+			break;
+		case 'p':
+			np = atoi(optarg);
+			if(np < 1 || np > 5){
+					fprintf(stderr,"Invalid argument %s for np. Needs to be a positive integer > 0 and < 5\n", optarg);
+					return EXIT_FAILURE;
+				}
 			break;
 		case '?':
 			if (optopt == 'n' || optopt == 'r')
@@ -75,12 +85,12 @@ int main(int argc, char **argv){
 /**
  * @brief Solve the poisson equation with only Dirichlet boundary conditions and g(x,y) = g1
  */
-	solver_params dirichlet1 = {"Dirichlet1", n, &phi, &g1, save_data, use_multigrid, reltol, 0};
+	solver_params dirichlet1 = {"Dirichlet1", n, &phi, &g1, save_data, use_multigrid, reltol, NM_NONE};
 
 /**
  * @brief Solve the poisson equation with only Dirichlet boundary conditions and g(x,y) = g2
  */
-	solver_params dirichlet2 = {"Dirichlet2", n, &phi, &g2, save_data, use_multigrid, reltol, 0};
+	solver_params dirichlet2 = {"Dirichlet2", n, &phi, &g2, save_data, use_multigrid, reltol, NM_NONE};
 
 /**
  * @brief Solve the poisson equation with only Neumann boundary conditions and g(x,y) = g1,
@@ -99,10 +109,10 @@ int main(int argc, char **argv){
 	solver_params *problems[5] = {&mixed, &dirichlet1, &dirichlet2, &neumann1, &neumann2};
 	pthread_t thread[5];
 	
-	for(int i = 0; i < 5; i++){
+	for(int i = 0; i < np; i++){
 		pthread_create( &thread[i], NULL, &solve, (void*) problems[i]);
 	}
-	for(int i = 0; i < 5; i++){
+	for(int i = 0; i < np; i++){
 		pthread_join( thread[i], NULL);
 	}
 

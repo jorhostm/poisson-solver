@@ -1,3 +1,12 @@
+/**
+ * @file solver_utils.h
+ * @author Jørgen Høstmark (jorgenhostm@gmail.com)
+ * @brief This header file decleares the helper functions for the poissonsolver. 
+ * See solver_utils.c for implementation details
+ * @version 1.0
+ * @date 2021-05-04
+ * 
+ */
 #ifndef SOLVER_UTILS_H
 #define SOLVER_UTILS_H
 
@@ -5,7 +14,7 @@
  * @brief Computes the theoretical optimal relaxation factor omega for the SOR iteration method.
  *	Works for Laplace and Poisson equations in a rectangular domain.
  *	In this case the domain is a n-by-n grid with x,y = [0, 1].
- *	The specral radius rho(A) = cos(PI*h), where h is the step size = 1/(n-1)
+ *	The specral radius the Jacobi matrix rho(C_J) = cos(PI*h), where h is the step size = 1/(n-1)
  * 
  * @param n The amount of discretized points along an axis.
  * @return double The theoretical optimal relaxation factor

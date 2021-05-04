@@ -5,7 +5,6 @@
  * @version 1.0
  * @date 2021-04-22
  * 
- * @copyright Copyright (c) 2021
  * 
  */
 
@@ -541,14 +540,10 @@ void bvp_destroy(bvp_t bvp){
 	--(bvp->result);
 	free((bvp->result[0]));
 	free(bvp->result);
-	bvp->result = NULL;
 
 	free(bvp->x_val);
-	bvp->x_val = NULL;
-	bvp->y_val = NULL;
 
 	free(bvp->b);
-	bvp->b = NULL;
 
 	free(bvp);
 }

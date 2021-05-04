@@ -1,4 +1,3 @@
-all: example demo
 
 IDIR =../include
 LDIR =../lib
@@ -9,7 +8,43 @@ BDIR=../build
 ODIR=obj
 
 EXAMPLE_LIBS= -lm -lpthread
-DEMO_LIBS= -lglut -lGL
+DEMO_LIBS=
+
+ifeq ($(OS),Windows_NT)
+    CCFLAGS += -D WIN32
+	DEMO_LIBS += -lglut32 -lglu32 -lopengl32
+    ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
+        CFLAGS += -D AMD64
+    else
+        ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+            CFLAGS += -D AMD64
+        endif
+        ifeq ($(PROCESSOR_ARCHITECTURE),x86)
+            CFLAGS += -D IA32
+        endif
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Linux)
+        CFLAGS += -D LINUX
+		DEMO_LIBS += -lfreeglut -lGLU -lGL
+    endif
+    ifeq ($(UNAME_S),Darwin)
+        CFLAGS += -D OSX
+		DEMO_LIBS += -framework GLUT -framework OpenGL -framework Cocoa
+    endif
+    UNAME_P := $(shell uname -p)
+    ifeq ($(UNAME_P),x86_64)
+        CFLAGS += -D AMD64
+    endif
+    ifneq ($(filter %86,$(UNAME_P)),)
+        CFLAGS += -D IA32
+    endif
+    ifneq ($(filter arm%,$(UNAME_P)),)
+        CFLAGS += -D ARM
+    endif
+endif
+
 
 _DEPS = poissonsolver.h example.h solver_utils.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
