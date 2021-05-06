@@ -542,7 +542,7 @@ void bvp_destroy(bvp_t bvp){
 	free(bvp->result);
 
 	free(bvp->x_val);
-
+	free(bvp->b[0]);
 	free(bvp->b);
 
 	free(bvp);

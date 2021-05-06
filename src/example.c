@@ -110,7 +110,7 @@ int main(int argc, char **argv){
 	pthread_t thread[5];
 	
 	for(int i = 0; i < np; i++){
-		pthread_create( &thread[i], NULL, &solve, (void*) problems[i]);
+		pthread_create( &thread[i], NULL, (void*) &solve, (void*) problems[i]);
 	}
 	for(int i = 0; i < np; i++){
 		pthread_join( thread[i], NULL);

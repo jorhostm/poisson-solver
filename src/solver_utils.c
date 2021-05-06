@@ -96,7 +96,7 @@ double* create_linear_array(const double from, const double to, const unsigned i
  */
 int is_admissable(const unsigned int n, const unsigned int multigrid_min){
 	
-	if ( n <= multigrid_min)
+	if ( n < multigrid_min)
 	{
 		return 1;
 	}

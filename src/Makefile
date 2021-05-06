@@ -8,11 +8,11 @@ BDIR=../build
 ODIR=obj
 
 EXAMPLE_LIBS= -lm -lpthread
-DEMO_LIBS=
+DEMO_LIBS= -lm
 
 ifeq ($(OS),Windows_NT)
-    CCFLAGS += -D WIN32
-	DEMO_LIBS += -lglut32 -lglu32 -lopengl32
+    CFLAGS += -D WIN32
+	DEMO_LIBS += -lfreeglut -lglu32 -lopengl32
     ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
         CFLAGS += -D AMD64
     else
@@ -27,7 +27,7 @@ else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
         CFLAGS += -D LINUX
-		DEMO_LIBS += -lfreeglut -lGLU -lGL
+		DEMO_LIBS += -lglut -lGLU -lGL
     endif
     ifeq ($(UNAME_S),Darwin)
         CFLAGS += -D OSX
