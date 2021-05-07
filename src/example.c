@@ -26,7 +26,7 @@ int main(int argc, char **argv){
 	unsigned int use_multigrid = 0;	// Whether to use multigrids or not
 	unsigned int save_data = 0;		// Whether to save the data to file
 	unsigned int np = 5;			// Number of problems to solve
-	double reltol = 1e-6;			// Relative tolerance
+	double reltol = 1e-5;			// Relative tolerance
 
   	int c;
 	// Process the options
@@ -34,7 +34,7 @@ int main(int argc, char **argv){
 		switch (c)
 		{
 		case 'h':
-			printf(help_msg);
+			printf("%s",help_msg);
 			return EXIT_SUCCESS;
 			break;
 		case 'm':
