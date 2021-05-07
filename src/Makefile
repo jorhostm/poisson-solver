@@ -107,4 +107,4 @@ clean:
 	rm -rf $(BDIR)/test*
 	rm -rf $(BDIR)/demo*
 
-.PHONY: clean example demo test
+.PHONY: clean example demo test all

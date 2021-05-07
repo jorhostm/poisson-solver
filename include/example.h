@@ -105,13 +105,13 @@ void solve( void *parameters){
 	
     /* Start timer */
     struct timespec start, end;
-	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+	clock_gettime(CLOCK_MONOTONIC, &start);
 	
     /* Solve the BVP */
 	int i = solve_poisson_bvp(bvp, params->use_multigrid, params->reltol);
 	
     /* End timer */
-	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+	clock_gettime(CLOCK_MONOTONIC, &end);
 	double secs = (double) (end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec) / 1000000000;
 
     /* If we only have neumann boundaries, then we need to correct the solution */
