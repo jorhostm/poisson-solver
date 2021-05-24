@@ -22,7 +22,7 @@ int main(int argc, char **argv){
 	double (*dirichlet)(double x, double y);
 	double (*g)(double x, double y);
 
-	char filename[50];
+	char filename[50] = "";
   	int c;
 	// Process the options
 	while ((c = getopt(argc, argv, "f:t:s:mr:n:p:")) != -1)
@@ -96,8 +96,11 @@ int main(int argc, char **argv){
 		break;
 	}
 
-    FILE *f;
-    f = fopen(filename, "w");
+	FILE *f;
+	c = strcmp(filename, "");
+	if(c != 0){
+			f = fopen(filename, "w");
+	}
    
     for (int n = from; n <= to; n+=step)
     {
@@ -116,10 +119,17 @@ int main(int argc, char **argv){
         double secs = (double) (end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec) / 1000000000;
 		printf("%d %f %d\n",n,secs,i);
 		fflush(stdout);
-        fprintf(f,"%d %f %d\n",n,secs,i);
-		fflush(f);
+        
+		if(c != 0){
+			fprintf(f,"%d %f %d\n",n,secs,i);
+			fflush(f);
+		}
+
 		bvp_destroy(bvp);
     }
+	if(c != 0){
+		 fclose(f);
+	}
 
-    fclose(f);
+	return 0;
 }
