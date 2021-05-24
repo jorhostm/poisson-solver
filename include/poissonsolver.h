@@ -21,7 +21,7 @@
 #define NM_ONLY         (NM_X0 | NM_X1 | NM_Y0 | NM_Y1)
 
 #ifndef MULTIGRID_MIN
-#define MULTIGRID_MIN   100
+#define MULTIGRID_MIN   50
 #endif
 /**
  * @brief Poisson Boundary Value Type

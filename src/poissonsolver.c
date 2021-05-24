@@ -33,7 +33,7 @@ struct bvp_t{
  * 
  * @param src_bvp The source BVP solution
  * @param dest_bvp The destination BVP solution
- * @return int Returns 0 on success, -1 on failure
+ * @return int Returns 0 on success
  */
 static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
 	
@@ -42,141 +42,12 @@ static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
 	double **src_r = src_bvp->result;
 	double **dest_r = dest_bvp->result;
 
-
-	if (src_n != dest_n/2 + 1)
-	{
-		return -1;
-	}
 	
-	/* 
-		The destination grid has about 4 times the amount of points as the source grid,
-		Copy over the first batch of datapoints,
-		then interpolate the rest
-	*/
-	for (int i = 0; i < src_n; i++)
-	{
-		for (int j = 0; j < src_n; j++)
-		{
-			dest_r[2*i][2*j] = src_r[i][j];
-		}
-		
-	}
-	
-	/* 
-		In case of Neumann boundary at x = 0, 
-		interpolate the remaining datapoints on that boundary
-	*/
-	if (dest_bvp->nm_flags & NM_X0)
-	{
-		for (int j = 0; j < src_n-1; j++)
-		{
-			dest_r[0][2*j+1] = 0.5*(dest_r[0][2*j] + dest_r[0][2*j+2]);
-		}
-	}
-
-	/* 
-		In case of Neumann boundary at y = 0, 
-		interpolate the remaining datapoints on that boundary
-	*/
-	if (dest_bvp->nm_flags & NM_Y0)
-	{
-		for (int i = 0; i < src_n-1; i++)
-		{
-			dest_r[2*i+1][0] = 0.5*(dest_r[2*i][0] + dest_r[2*i+2][0]);
-		}
-	}
-
-	/* 
-		In case of Neumann boundary at x = 1, 
-		interpolate the remaining datapoints on that boundary
-	*/
-	if (dest_bvp->nm_flags & NM_X1)
-	{
-		const int i = src_n-1;
-		for (int j = 0; j < src_n-1; j++)
-		{
-			dest_r[2*i][2*j+1] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i][2*j+2]);
-		}
-	}
-
-	/* 
-		In case of Neumann boundary at y = 1, 
-		interpolate the remaining datapoints on that boundary
-	*/
-	if (dest_bvp->nm_flags & NM_Y1)
-	{
-		const int j = src_n-1;
-		for (int i = 0; i < src_n-1; i++)
-		{
-			dest_r[2*i+1][2*j] = 0.5*(dest_r[2*i][2*j] + dest_r[2*i+2][2*j]);
-		}
-	}
-
-	/*
-		Second batch
-		Interpolate between the points from the first batch
-
-				◯   ◯
-		x 	:=
-				◯	◯
-	*/
-	for (int i = 0; i < src_n-1; i++)
-	{
-		for (int j = 0; j < src_n-1; j++)
-		{
-			double corner_sum = dest_r[2*i][2*j];	// Top-Left
-			corner_sum += dest_r[2*i+2][2*j];		// Top-Right
-			corner_sum += dest_r[2*i][2*j+2];		// Bottom-Left
-			corner_sum += dest_r[2*i+2][2*j+2];		// Bottom-Right
-			dest_r[2*i+1][2*j+1] = 0.25*corner_sum;	// Middle = Average of the 4-corner-neighbourhood
-		}
-		
-	}
-	/*
-		Third batch
-		Interpolate between the points from the first and second batch
-
-				  ◯ 
-		△ 	:=	x	x
-				  ◯
-	*/
-	// Account for odd numbered grid size, so it does not go out of bounds in x-direction
-	for (int i = 0; i < src_n-2; i++)
-	{
-		
-		for (int j = 0; j < src_n-1; j++)
-		{
-			double cross_sum = dest_r[2*i+2][2*j];	// Top
-			cross_sum += dest_r[2*i+2][2*j+2];		// Botton
-			cross_sum += dest_r[2*i+1][2*j+1];		// Left
-			cross_sum += dest_r[2*i+3][2*j+1];		// Right
-			dest_r[2*i+2][2*j+1] = 0.25*cross_sum;	// Middle = Average of the 4-cross-neighbourhood
-		}
-		
-	}
-	
-	/*
-		Fourth batch
-		Interpolate between the points from the first, second and third batch
-
-				△ x △
-		□ 	:=	◯	◯
-				△ x △
-	*/
-	for (int i = 0; i < src_n-1; i++)
-	{
-		// Account for odd numbered grid size, so it does not go out of bounds in y-direction
-		for (int j = 0; j < src_n-2; j++)
-		{
-			double sum = dest_r[2*i][2*j+1];	// Top-Left
-			sum += dest_r[2*i+1][2*j+1];		// Top
-			sum += dest_r[2*i+2][2*j+1];		// Top-Right
-			sum += dest_r[2*i][2*j+2];			// Left
-			sum += dest_r[2*i+2][2*j+2];		// Right
-			sum += dest_r[2*i][2*j+3];			// Bottom-Left
-			sum += dest_r[2*i+1][2*j+3];		// Bottom
-			sum += dest_r[2*i+2][2*j+3];		// Bottom-Right
-			dest_r[2*i+1][2*j+2] = 0.125*sum;	// Middle = Average of 8-neighbourhood
+	for(int i = 0; i < dest_n; i++){
+		double x = dest_bvp->x_val[i];
+		for(int j = 0; j < dest_n; j++){
+			double y = dest_bvp->y_val[j];
+			dest_r[i][j] = get_value_at(src_bvp, x, y);
 		}
 	}
 
@@ -196,9 +67,9 @@ static int sor(bvp_t bvp, const double reltol){
 	const unsigned int n = bvp->n;
 	double **T = bvp->result;
 	double **b = bvp->b;
-	double h = 1.0/((double) n - 1);
+	double h = 1.0/( n - 1.0);
 	double h2 = h*h;
-	double omega = get_omega(n);
+	double omega = 1.0;
 
 	/* Relative residual*/
 	
@@ -263,7 +134,7 @@ static int sor(bvp_t bvp, const double reltol){
         }
 		
         rel_res = dT_sum/T_sum;
-       	
+       	omega = get_next_omega(omega,n);
         iterations++;
     } 
     return iterations;  
@@ -283,7 +154,7 @@ int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double 
 	int iterations = 0;
 	
 	if(n >= MULTIGRID_MIN && use_multigrid){
-		bvp_t coarse_bvp = bvp_create(n/2 + 1, bvp->phi,bvp->g,bvp->nm_flags);
+		bvp_t coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_flags);
 		iterations += solve_poisson_bvp(coarse_bvp, use_multigrid, reltol);
 		bvpcpy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
@@ -387,6 +258,7 @@ double get_value_at(bvp_t bvp, const double x, const double y){
 
 	double **result = bvp->result;
 	int n = bvp->n;
+	double h = 1.0/(n-1.0);
 
 	// Domain check
 	if (x < 0 || x > 1 || y < 0 || y > 1){
@@ -397,54 +269,15 @@ double get_value_at(bvp_t bvp, const double x, const double y){
 	double *x_values = bvp->x_val;
 	double *y_values = bvp->y_val;
 
-	int i_left = 0;
-	int i_right = n-1;
-	int j_left = 0;
-	int j_right = n-1;
-
-	int delta_i = i_right - i_left;
-	int delta_j = j_right - j_left;
-
-	while (delta_i > 1 || delta_j > 1 ){
-
-		delta_i = i_right - i_left;
-		delta_j = j_right - j_left;
-		
-		int i_mid = (i_left + i_right) / 2;
-		int j_mid = (j_left + j_right) / 2;
-
-		if (x <= x_values[i_mid]){
-			
-			i_right = i_mid;
-
-		}
-
-		else{
-
-			i_left = i_mid;
-
-		}
-
-		if (y <= y_values[j_mid]){
-			
-			j_right = j_mid;
-
-		}
-
-		else{
-
-			j_left = j_mid;
-
-		}
-	
-	}
+	unsigned int i_left = x*(n-1);
+	unsigned int i_right = ceil(x*(n-1));
+	unsigned int j_left = y*(n-1);
+	unsigned int j_right = ceil(y*(n-1));
 
 	double t11 = result[i_left][j_left];
 	double t21 = result[i_right][j_left];
 	double t12 = result[i_left][j_right];
 	double t22 = result[i_right][j_right];
-
-	double h = x_values[1] - x_values[0];
 
 	double x_normalised = (x-x_values[i_left])/h;
 	double y_normalised = (y-y_values[j_left])/h;
@@ -453,7 +286,7 @@ double get_value_at(bvp_t bvp, const double x, const double y){
 	double a21 = t21 - t11;
 	double a12 = t12 - t11;
 	double a22 = t22 + t11 - (t21 + t12);
-
+	
 	double t_xy = a11 + a21 * x_normalised + a12 * y_normalised + a22 * x_normalised * y_normalised;
 
 	return t_xy;
@@ -489,8 +322,7 @@ void shift_solution(bvp_t bvp, const double delta_t){
  */
 bvp_t bvp_create(unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags){
 	bvp_t bvp = malloc(sizeof(struct bvp_t));
-	n = find_admissable(n, MULTIGRID_MIN);
-	
+
 	bvp->n = n;
 	bvp->phi = phi;
 	bvp->g = g;
