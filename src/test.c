@@ -16,6 +16,7 @@ int main(int argc, char **argv){
     unsigned int from = 100;
     unsigned int to = 1000;
     unsigned int step = 100;
+	unsigned int num_threads_total = 1;
 
 	int nm_flags = NM_NONE;
 	unsigned int p = 0;				// Problem to solve: 0=Mixed, 1=Dirichlet1, 2=Dirichlet2, 3=Neumann1, 4=Neumann2
@@ -25,7 +26,7 @@ int main(int argc, char **argv){
 	char filename[50] = "";
   	int c;
 	// Process the options
-	while ((c = getopt(argc, argv, "f:t:s:mr:n:p:")) != -1)
+	while ((c = getopt(argc, argv, "f:t:s:mr:n:p:j:")) != -1)
 		switch (c)
 		{
         case 'f':
@@ -46,6 +47,8 @@ int main(int argc, char **argv){
 		case 'n':
 			strcpy(filename,optarg);
 			break;
+		case 'j':
+			num_threads_total = atoi(optarg);
 		case 'r':
 			reltol = atof(optarg);
 			if(reltol <= 0.0){
@@ -112,7 +115,7 @@ int main(int argc, char **argv){
         clock_gettime(CLOCK_MONOTONIC, &start);
         
         /* Solve the BVP */
-        int i = solve_poisson_bvp(bvp, use_multigrid, reltol);
+        int i = solve_poisson_bvp(bvp, use_multigrid, reltol, num_threads_total);
         
         /* End timer */
         clock_gettime(CLOCK_MONOTONIC, &end);

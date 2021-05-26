@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <unistd.h>
+#include <pthread.h>
 
 #include <poissonsolver.h>
 #include <solver_utils.h>
@@ -28,6 +28,23 @@ struct bvp_t{
     int nm_flags;
 };
 
+typedef struct {
+	pthread_mutex_t *mutex;
+	pthread_cond_t *cv;
+	bvp_t bvp;
+	int i_start;
+	int i_end;
+	int j_start;
+	int j_end;
+	double reltol;
+	double *rel_res;
+	double *T_sum_tot;
+	double *dT_sum_tot;
+	unsigned int num_threads_total;
+	unsigned int *num_threads_waiting;
+	int *iterations;
+} THREAD_DATA;
+
 /**
  * @brief Copy result of a coarser bvp over to a bvp with a finer grid and interpolate the remaining datapoints
  * 
@@ -35,11 +52,9 @@ struct bvp_t{
  * @param dest_bvp The destination BVP solution
  * @return int Returns 0 on success
  */
-static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
+static int bvpcpy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp){
 	
-	const int src_n = src_bvp->n;
 	const int dest_n = dest_bvp->n;
-	double **src_r = src_bvp->result;
 	double **dest_r = dest_bvp->result;
 
 	
@@ -54,6 +69,117 @@ static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
 	return 0;
 }
 
+static void red_black_sor(void* thread_data){
+	
+	THREAD_DATA *data = (THREAD_DATA*) thread_data;
+
+	const unsigned int n = data->bvp->n;
+	double **T = data->bvp->result;
+	double **b = data->bvp->b;
+	double h = 1.0/( n - 1.0);
+	double h2 = h*h;
+	double omega = 1.0;
+
+	 int i_start = data->i_start;
+	 int i_end = data->i_end;
+	 int j_start = data->j_start;
+	 int j_end = data->j_end;
+
+	 double T_sum = 0.0;
+	double dT_sum = 0.0;
+	 
+	 while (*(data->rel_res) > data->reltol){
+
+		int isw = 0;
+		
+		/* Odd-even ordering */
+		for (int pass = 1; pass <= 2; pass++){
+			
+			int jsw = isw;
+			
+			for (int i = i_start; i < i_end; i++){
+				
+				int a1 = 1;	//	T(i-1,j)
+				int a3 = 1;	// 	T(i+1,j)
+				
+				/* Check if there is a Neumann boundary at x = 0 */
+				if(i == 0){
+					a1 = 0;
+					a3 = 2;
+				}
+				/* Check if there is a Neumann boundary at x = 1 */
+				else if(i == n-1){
+					a1 = 2;
+					a3 = 0;
+				}
+
+				for (int j = j_start + jsw; j < j_end; j+=2){
+
+					int a0 = 1;	// 	T(i,j-1)
+					int a2 = 1; // 	T(i,j+1)
+
+					/* Check if there is a Neumann boundary at y = 0 */
+					if(j == 0){
+						a0 = 0;
+						a2 = 2;
+					}
+					/* Check if there is a Neumann boundary at y = 1 */
+					else if(j == n-1){
+						a0 = 2;
+						a2 = 0;
+					}
+					
+					/* Compute the residual */
+					double R = a0*T[i][j-1] + a1*T[i-1][j] + a2*T[i][j+1] + a3*T[i+1][j] - 4*T[i][j] - h2*b[i][j];
+					/* Apply relaxation factor */
+					double dT = omega*0.25*R;
+					/* Add the residual to the solution */
+					T[i][j] += dT;
+				
+					T_sum += fabs(T[i][j]);
+					dT_sum += fabs(dT);
+
+				}
+
+				jsw = 1 - jsw;
+
+			}
+
+			pthread_mutex_lock(data->mutex);
+			*(data->T_sum_tot) += T_sum;
+			*(data->dT_sum_tot) += dT_sum;
+			T_sum = 0;
+			dT_sum = 0;
+			
+			if ( ++(*(data->num_threads_waiting)) == data->num_threads_total )
+			{	
+				(*(data->iterations))++;
+				*(data->num_threads_waiting) = 0;
+				if (pass == 2)
+				{
+					*(data->rel_res) = *(data->dT_sum_tot)/(*(data->T_sum_tot));
+					*(data->T_sum_tot) = 0;
+					*(data->dT_sum_tot) = 0;
+				}
+				pthread_cond_broadcast(data->cv);
+
+			}
+			else
+			{	
+				int it = *(data->iterations);
+				do
+					pthread_cond_wait(data->cv,data->mutex);
+				 while (it == *(data->iterations));
+			}
+			pthread_mutex_unlock(data->mutex);
+
+			isw = 1 - isw;
+			omega = get_next_omega(omega,n);
+
+		}		
+    } 
+}
+
 /**
  * @brief Solves the Poisson Boundary Value Problem using Succesive Over-Relaxation for the Gauss-Seidel method
  * 
@@ -62,14 +188,9 @@ static int bvpcpy(const bvp_t src_bvp, bvp_t dest_bvp){
  * 				Smaller => greater accuracy ,but more iterations
  * @return int The number of iterations used to reach convergence
  */
-static int sor(bvp_t bvp, const double reltol){
-	
+static int sor(bvp_t restrict bvp, const double reltol, unsigned int num_threads_total){
+
 	const unsigned int n = bvp->n;
-	double **T = bvp->result;
-	double **b = bvp->b;
-	double h = 1.0/( n - 1.0);
-	double h2 = h*h;
-	double omega = 1.0;
 
 	/* Relative residual*/
 	
@@ -82,62 +203,40 @@ static int sor(bvp_t bvp, const double reltol){
 	const unsigned int j_start 	= bvp->nm_flags & NM_Y0 ? 0 : 1;
 	const unsigned int j_end 	= bvp->nm_flags & NM_Y1 ? n : n-1;
 
-    
-    while (rel_res > reltol){
-        
-		double T_sum = 0.0;
-		double dT_sum = 0.0;
-        
-		for (int i = i_start; i < i_end; i++){
+	unsigned int num_threads_waiting = 0;
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+	double T_sum_tot, dT_sum_tot;
 
-			int a1 = 1;	//	T(i-1,j)
-			int a3 = 1;	// 	T(i+1,j)
-			
-			/* Check if there is a Neumann boundary at x = 0 */
-			if(i == 0){
-				a1 = 0;
-				a3 = 2;
-			}
-			/* Check if there is a Neumann boundary at x = 1 */
-			else if(i == n-1){
-				a1 = 2;
-				a3 = 0;
-			}
+	THREAD_DATA *thread_data = (THREAD_DATA*) calloc(num_threads_total, sizeof(THREAD_DATA));
+	pthread_t *thread = (pthread_t*) calloc(num_threads_total, sizeof(pthread_t));
+	for (int i = 0; i < num_threads_total; i++)
+	{
+		thread_data[i].mutex = &mutex;
+		thread_data[i].cv = &cv;
+		thread_data[i].bvp = bvp;
+		thread_data[i].i_start = i*i_end/num_threads_total+i_start;
+		thread_data[i].i_end = (i+1)*i_end/num_threads_total+i_start;
+		thread_data[i].j_start = j_start;
+		thread_data[i].j_end = j_end;
+		thread_data[i].reltol = reltol;
+		thread_data[i].rel_res = &rel_res;
+		thread_data[i].T_sum_tot = &T_sum_tot;
+		thread_data[i].dT_sum_tot = &dT_sum_tot;
+		thread_data[i].num_threads_total = num_threads_total;
+		thread_data[i].num_threads_waiting = &num_threads_waiting;
+		thread_data[i].iterations = &iterations;
+		pthread_create(&thread[i],NULL,(void*) &red_black_sor, (void*) &thread_data[i]);
+	}
+	for (int i = 0; i < num_threads_total; i++)
+	{
+		pthread_join(thread[i], NULL);
+	}
+	
+	pthread_mutex_destroy(&mutex);
+	pthread_cond_destroy(&cv);
 
-            for (int j = j_start; j < j_end; j++){
-
-				int a0 = 1;	// 	T(i,j-1)
-            	int a2 = 1; // 	T(i,j+1)
-
-				/* Check if there is a Neumann boundary at y = 0 */
-                if(j == 0){
-                	a0 = 0;
-                	a2 = 2;
-                }
-				/* Check if there is a Neumann boundary at y = 1 */
-                else if(j == n-1){
-                	a0 = 2;
-                	a2 = 0;
-                }
-				
-				/* Compute the residual */
-                double R = a0*T[i][j-1] + a1*T[i-1][j] + a2*T[i][j+1] + a3*T[i+1][j] - 4*T[i][j] - h2*b[i][j];
-                /* Apply relaxation factor */
-				double dT = omega*0.25*R;
-                /* Add the residual to the solution */
-				T[i][j] += dT;
-			
-				T_sum += fabs(T[i][j]);
-				dT_sum += fabs(dT);
-
-            }
-        }
-		
-        rel_res = dT_sum/T_sum;
-       	omega = get_next_omega(omega,n);
-        iterations++;
-    } 
-    return iterations;  
+    return iterations/2;  
 }
 
 /**
@@ -149,18 +248,18 @@ static int sor(bvp_t bvp, const double reltol){
  * 				Smaller => greater accuracy ,but more iterations
  * @return int The number of iterations used to reach convergence
  */
-int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol){
+int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol, const unsigned int num_threads_total){
 	int n = bvp->n;
 	int iterations = 0;
 	
 	if(n >= MULTIGRID_MIN && use_multigrid){
-		bvp_t coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_flags);
-		iterations += solve_poisson_bvp(coarse_bvp, use_multigrid, reltol);
+		bvp_t coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_flags);;
+		iterations += solve_poisson_bvp(coarse_bvp, use_multigrid, reltol*2, num_threads_total);
 		bvpcpy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
 	}
 	
-	iterations += sor(bvp, reltol);
+	iterations += sor(bvp, reltol, num_threads_total);
 
 	return iterations;
 }
@@ -254,7 +353,7 @@ void create_gnuplot_data(bvp_t bvp, const char *name){
  * @param y The y-coordinate
  * @return double 
  */
-double get_value_at(bvp_t bvp, const double x, const double y){
+double get_value_at(bvp_t restrict bvp, const double x, const double y){
 
 	double **result = bvp->result;
 	int n = bvp->n;

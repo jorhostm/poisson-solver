@@ -29,6 +29,7 @@ typedef struct solver_params {
     unsigned int save_data;
     unsigned int use_multigrid;
     double reltol;
+    unsigned int num_threads_total;
     int nm_flags;
     double value_at_xyz[3];
 } solver_params;
@@ -108,7 +109,7 @@ void solve( void *parameters){
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	
     /* Solve the BVP */
-	int i = solve_poisson_bvp(bvp, params->use_multigrid, params->reltol);
+	int i = solve_poisson_bvp(bvp, params->use_multigrid, params->reltol, params->num_threads_total);
 	
     /* End timer */
 	clock_gettime(CLOCK_MONOTONIC, &end);

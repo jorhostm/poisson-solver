@@ -79,7 +79,7 @@ void create_gnuplot_data(bvp_t bvp, const char *filename);
  * @param reltol The relative tolerence for the relative residual convergence. Smaller => greater accuracy but more iterations
  * @return int The number of iterations used to reach convergence
  */
-int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol);
+int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol, const unsigned int num_threads_total);
 
 /**
  * @brief Create and initialize a Poisson Boundary Value Problem

@@ -27,10 +27,11 @@ int main(int argc, char **argv){
 	unsigned int save_data = 0;		// Whether to save the data to file
 	unsigned int np = 5;			// Number of problems to solve
 	double reltol = 1e-5;			// Relative tolerance
+	unsigned int num_threads_total = 1;
 
   	int c;
 	// Process the options
-	while ((c = getopt(argc, argv, "hmsn:r:p:")) != -1)
+	while ((c = getopt(argc, argv, "hmsn:r:p:t:")) != -1)
 		switch (c)
 		{
 		case 'h':
@@ -64,6 +65,13 @@ int main(int argc, char **argv){
 					return EXIT_FAILURE;
 				}
 			break;
+		case 't':
+			num_threads_total = atoi(optarg);
+			if(num_threads_total < 1){
+					fprintf(stderr,"Invalid argument %s for number of threads. Needs to be a positive integer > 0\n", optarg);
+					return EXIT_FAILURE;
+				}
+			break;
 		case '?':
 			if (optopt == 'n' || optopt == 'r')
 				fprintf (stderr, "Option -%c requires an argument.\n", optopt);
@@ -81,27 +89,27 @@ int main(int argc, char **argv){
  *	Solve the poisson equation with mixed boundary conditions and g(x,y) = 0
  *	Neumann at x = 0 and y = 0, Dirichlet at x = 1 and y = 1 where phi(x,1) = 1 and phi(y,1) = 0
  */
-	solver_params mixed = {"Mixed", n, &mix, NULL, save_data, use_multigrid, reltol, NM_X0 | NM_Y0};
+	solver_params mixed = {.name = "Mixed", n, .phi = &mix, .g = NULL, save_data, use_multigrid, reltol, num_threads_total, .nm_flags = NM_X0 | NM_Y0};
 /**
  * @brief Solve the poisson equation with only Dirichlet boundary conditions and g(x,y) = g1
  */
-	solver_params dirichlet1 = {"Dirichlet1", n, &phi, &g1, save_data, use_multigrid, reltol, NM_NONE};
+	solver_params dirichlet1 = {.name = "Dirichlet1", n, .phi = &phi, .g = &g1, save_data, use_multigrid, reltol, num_threads_total, .nm_flags = NM_NONE};
 
 /**
  * @brief Solve the poisson equation with only Dirichlet boundary conditions and g(x,y) = g2
  */
-	solver_params dirichlet2 = {"Dirichlet2", n, &phi, &g2, save_data, use_multigrid, reltol, NM_NONE};
+	solver_params dirichlet2 = {.name = "Dirichlet2", n, .phi = &phi, .g = &g2, save_data, use_multigrid, reltol, num_threads_total, .nm_flags = NM_NONE};
 
 /**
  * @brief Solve the poisson equation with only Neumann boundary conditions and g(x,y) = g1,
  * given phi(0,0) = 0
  */
-	solver_params neumann1 = {"Neumann1", n, NULL, &g1, save_data, use_multigrid, reltol, NM_ONLY, {0,0,0}};
+	solver_params neumann1 = {.name = "Neumann1", n, .phi = NULL, .g = &g1, save_data, use_multigrid, reltol, num_threads_total, .nm_flags = NM_ONLY, .value_at_xyz = {0,0,0}};
 /**
  * @brief Solve the poisson equation with only Neumann boundary conditions and g(x,y) = g2,
  * given phi(0,0) = 0
  */
-	solver_params neumann2 = {"Neumann2", n, NULL, &g2, save_data, use_multigrid, reltol, NM_ONLY, {0,0,0}};
+	solver_params neumann2 = {.name = "Neumann2", n, .phi = NULL, .g = &g2, save_data, use_multigrid, reltol, num_threads_total, .nm_flags = NM_ONLY, .value_at_xyz = {0,0,0}};
 	
 /**
  * Solve each problem in their own separate thread
