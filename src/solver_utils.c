@@ -9,7 +9,6 @@
  */
 
 #include <stdlib.h>
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -26,7 +25,7 @@
  */
 double get_next_omega(double omega, const unsigned int n){
 	
-	double rho = cos(M_PI/(n-1)); 		// Spectral radius of the Jacobi iteration matrix, rho(C_J)
+	double rho = cosl(M_PI/(n-1)); 		// Spectral radius of the Jacobi iteration matrix, rho(C_J)
 	
 	omega = 1.0/(1-rho*rho*omega/4);	// Chebyshev acceleration
 	
@@ -54,8 +53,8 @@ void add_values(double** T, double (*func)(double x, double y), const unsigned i
 	}
 	
 
-	for(unsigned int i = i_start; i < i_end; i++){
-		for(unsigned int j = j_start; j < j_end; j++){
+	for(int i = i_start; i < i_end; i++){
+		for(int j = j_start; j < j_end; j++){
 			T[i][j] = func(x_vals[i], y_vals[j]);
 		}
 	}

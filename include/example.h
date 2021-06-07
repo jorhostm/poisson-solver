@@ -16,6 +16,8 @@
 
 #include <poissonsolver.h>
 
+#define MIN_N 10    // Arbitrary minimum number for discretization
+
 const char *help_msg = " -h \t\t Display help message\n -n [int] \t Set descretisaton number\n -m \t\t Use multigrid\n -s \t\t Save solution to file\n -r [double]\t Relative tolerance (default: 1e-6)\n -p [int]\t Number of problems to solve (default: 5)\n";
 
 /**
@@ -29,7 +31,6 @@ typedef struct solver_params {
     unsigned int save_data;
     unsigned int use_multigrid;
     double reltol;
-    unsigned int num_threads_total;
     int nm_flags;
     double value_at_xyz[3];
 } solver_params;
@@ -42,12 +43,12 @@ typedef struct solver_params {
  * @param y The y-coordinate
  * @return double The result of phi at boundary coordinate (x,y)
  */
-static double mix(double x, double y){
+double mix(double x, double y){
     if(y == 1.0){
         return 1.0;
     }
 
-    return 0;
+    return 0.0;
 }
 
 /**
@@ -58,7 +59,7 @@ static double mix(double x, double y){
  * @param y The y-coordinate
  * @return double The result of phi at boundary coordinate (x,y)
  */
-static double phi(double x, double y){
+double phi(double x, double y){
 
 	return 0.25*(x*x+y*y);
 	
@@ -71,9 +72,9 @@ static double phi(double x, double y){
  * @param y The y-coordinate
  * @return double The result of g(x,y)
  */
-static double g1(double x, double y){
+double g1(double x, double y){
 
-	return 12-12*x-12*y;
+	return 12.0-12.0*x-12.0*y;
 
 }
 
@@ -84,9 +85,9 @@ static double g1(double x, double y){
  * @param y The y-coordinate
  * @return double The result of g(x,y)
  */
-static double g2(double x, double y){
+double g2(double x, double y){
 
-	return (6-12*x)*(3*y*y-2*y*y*y) + (3*x*x-2*x*x*x)*(6-12*y);
+	return (6.0-12.0*x)*(3.0*y*y-2.0*y*y*y) + (3.0*x*x-2.0*x*x*x)*(6.0-12.0*y);
 
 }
 
@@ -109,7 +110,7 @@ void solve( void *parameters){
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	
     /* Solve the BVP */
-	int i = solve_poisson_bvp(bvp, params->use_multigrid, params->reltol, params->num_threads_total);
+	int i = bvp_solve(bvp, params->use_multigrid, params->reltol);
 	
     /* End timer */
 	clock_gettime(CLOCK_MONOTONIC, &end);
@@ -123,15 +124,15 @@ void solve( void *parameters){
         double y = values[1];
         double z = values[2];
         
-        double delta_t = get_value_at(bvp,x,y);
-	    shift_solution(bvp, z-delta_t);
+        double delta_t = bvp_get_value_at(bvp,x,y);
+	    bvp_shift_solution(bvp, z-delta_t);
     }
 
 	printf("%s finished after %f seconds using %d iterations\n", name, secs, i);
 	
 	if (params->save_data){
-		print_solution_to_file(bvp, name);
-		create_gnuplot_data(bvp, name);
+		bvp_print_solution_to_file(bvp, name);
+		bvp_create_gnuplot_data(bvp, name);
 	};
 
 	bvp_destroy(bvp);

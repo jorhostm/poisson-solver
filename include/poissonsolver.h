@@ -23,6 +23,7 @@
 #ifndef MULTIGRID_MIN
 #define MULTIGRID_MIN   100
 #endif
+
 /**
  * @brief Poisson Boundary Value Type
  */
@@ -36,7 +37,7 @@ typedef struct bvp_t* bvp_t;
  * @param y The y-coordinate
  * @return double 
  */
-double get_value_at(bvp_t bvp, const double x, const double y);
+double bvp_get_value_at(bvp_t restrict bvp, const double x, const double y);
 
 /**
  * @brief Shifts the entire solution by delta_t. Used to correct a solution with only Neumann boundaries
@@ -44,24 +45,14 @@ double get_value_at(bvp_t bvp, const double x, const double y);
  * @param bvp The Boundary Value Problem
  * @param delta_t The value to shift the solution by
  */
-void shift_solution(bvp_t bvp, const double delta_t);
+bvp_t shift_solution(bvp_t restrict bvp, const double delta_t);
 
 /**
- * @brief Saves the solution to file in the following format:
- * n n
- * phi(0,0)
- * phi(0,1*h)
- * .
- * .
- * phi(0,(n-1)*h)
- * phi(1*h,0)
- * .
- * .
- * phi(1,1)
+ * @brief Saves the solution to file
  * @param bvp The Boundary Value Problem
  * @param filename The full filename. Can include path
  */
-void print_solution_to_file(bvp_t bvp, const char *filename);
+void bvp_print_solution_to_file(bvp_t restrict bvp, const char *filename);
 
 /**
  * @brief Saves the solution to file in a format suitable for gnuplot: x y z, where z = phi(x,y)x y z, where z = phi(x,y)
@@ -69,7 +60,7 @@ void print_solution_to_file(bvp_t bvp, const char *filename);
  * @param bvp The Boundary Value Problem
  * @param filename The full filename. Can include path
  */
-void create_gnuplot_data(bvp_t bvp, const char *filename);
+void bvp_create_gnuplot_data(bvp_t restrict bvp, const char *filename);
 
 /**
  * @brief Solve the given Poisson Boundary Value Problem
@@ -79,7 +70,7 @@ void create_gnuplot_data(bvp_t bvp, const char *filename);
  * @param reltol The relative tolerence for the relative residual convergence. Smaller => greater accuracy but more iterations
  * @return int The number of iterations used to reach convergence
  */
-int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol, const unsigned int num_threads_total);
+int bvp_solve(bvp_t bvp, const unsigned int use_multigrid, const double reltol);
 
 /**
  * @brief Create and initialize a Poisson Boundary Value Problem
@@ -93,10 +84,19 @@ int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double 
 bvp_t bvp_create(const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags);
 
 /**
+ * @brief Copy result of a bvp over to another bvp. If destination BVP is NULL, creates a new one. Uses bilinear interpolation
+ * 
+ * @param src_bvp The source BVP solution
+ * @param dest_bvp The destination BVP solution
+ * @return bvp_t The destination BVP if successful, NULL otherwise
+ */
+bvp_t bvp_copy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp);
+
+/**
  * @brief Free up memory occupied by the Boundary Value Problem
  * 
  * @param bvp The Boundary Value Problem
  */
-void bvp_destroy(bvp_t bvp);
+void bvp_destroy(bvp_t restrict bvp);
 
 #endif

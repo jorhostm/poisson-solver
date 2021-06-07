@@ -1,7 +1,7 @@
 IDIR =../include
 LDIR =../lib
 CC=gcc
-CFLAGS= -O3 -I$(IDIR)
+CFLAGS= -Ofast -march=native -I$(IDIR)
 FORMAT=
 
 BDIR=../build

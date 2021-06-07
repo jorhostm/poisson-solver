@@ -16,85 +16,42 @@
 #include <poissonsolver.h>
 #include <solver_utils.h>
 
-struct bvp_t{
-
-    double **result;
-    unsigned int n;
-	double *x_val;
-	double *y_val;
-    double (*phi)(double x, double y);
-    double (*g)(double x, double y);
-    double **b;
-    int nm_flags;
-};
-
-typedef struct {
-	pthread_mutex_t *mutex;
-	pthread_cond_t *cv;
-	bvp_t bvp;
-	int i_start;
-	int i_end;
-	int j_start;
-	int j_end;
-	double reltol;
-	double *rel_res;
-	double *T_sum_tot;
-	double *dT_sum_tot;
-	unsigned int num_threads_total;
-	unsigned int *num_threads_waiting;
-	int *iterations;
-} THREAD_DATA;
 
 /**
- * @brief Copy result of a coarser bvp over to a bvp with a finer grid and interpolate the remaining datapoints
+ * @brief Iterate using Succesive Over-Relaxation for the Red-Black-Gauss-Seidel method
  * 
- * @param src_bvp The source BVP solution
- * @param dest_bvp The destination BVP solution
- * @return int Returns 0 on success
+ * @param bvp The Boundary Value Problem
+ * @param reltol The relative tolerence for the relative residual used to determine convergence. 
+ * 				Smaller => greater accuracy ,but more iterations
+ * @return int The number of iterations used to reach convergence
  */
-static int bvpcpy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp){
-	
-	const int dest_n = dest_bvp->n;
-	double **dest_r = dest_bvp->result;
+static int red_black_sor(bvp_t restrict bvp, const double reltol){
 
-	
-	for(int i = 0; i < dest_n; i++){
-		double x = dest_bvp->x_val[i];
-		for(int j = 0; j < dest_n; j++){
-			double y = dest_bvp->y_val[j];
-			dest_r[i][j] = get_value_at(src_bvp, x, y);
-		}
-	}
-
-	return 0;
-}
-
-static void red_black_sor(void* thread_data){
-	
-	THREAD_DATA *data = (THREAD_DATA*) thread_data;
-
-	const unsigned int n = data->bvp->n;
-	double **T = data->bvp->result;
-	double **b = data->bvp->b;
+	const unsigned int n = bvp->n;
+	double **T = bvp->result;
+	double **b = bvp->b;
 	double h = 1.0/( n - 1.0);
 	double h2 = h*h;
 	double omega = 1.0;
 
-	 int i_start = data->i_start;
-	 int i_end = data->i_end;
-	 int j_start = data->j_start;
-	 int j_end = data->j_end;
+	const unsigned int i_start 	= bvp->nm_flags & NM_X0 ? 0 : 1;
+	const unsigned int i_end 	= bvp->nm_flags & NM_X1 ? n : n-1;
+	const unsigned int j_start 	= bvp->nm_flags & NM_Y0 ? 0 : 1;
+	const unsigned int j_end 	= bvp->nm_flags & NM_Y1 ? n : n-1;
 
-	 double T_sum = 0.0;
-	double dT_sum = 0.0;
+	double rel_res;
+	int iterations = 0;
 	 
-	 while (*(data->rel_res) > data->reltol){
+	do {
+
+	 	double T_sum = 0.0;
+		double dT_sum = 0.0;
 
 		int isw = 0;
 		
 		/* Odd-even ordering */
 		for (int pass = 1; pass <= 2; pass++){
-			
+
 			int jsw = isw;
 			
 			for (int i = i_start; i < i_end; i++){
@@ -145,98 +102,17 @@ static void red_black_sor(void* thread_data){
 
 			}
 
-			pthread_mutex_lock(data->mutex);
-			*(data->T_sum_tot) += T_sum;
-			*(data->dT_sum_tot) += dT_sum;
-			T_sum = 0;
-			dT_sum = 0;
-			
-			if ( ++(*(data->num_threads_waiting)) == data->num_threads_total )
-			{	
-				(*(data->iterations))++;
-				*(data->num_threads_waiting) = 0;
-				if (pass == 2)
-				{
-					*(data->rel_res) = *(data->dT_sum_tot)/(*(data->T_sum_tot));
-					*(data->T_sum_tot) = 0;
-					*(data->dT_sum_tot) = 0;
-				}
-				pthread_cond_broadcast(data->cv);
-
-			}
-			else
-			{	
-				int it = *(data->iterations);
-				do
-					pthread_cond_wait(data->cv,data->mutex);
-				 while (it == *(data->iterations));
-			}
-			pthread_mutex_unlock(data->mutex);
-
 			isw = 1 - isw;
 			omega = get_next_omega(omega,n);
 
-		}		
-    } 
-}
+		}
 
-/**
- * @brief Solves the Poisson Boundary Value Problem using Succesive Over-Relaxation for the Gauss-Seidel method
- * 
- * @param bvp The Boundary Value Problem
- * @param reltol The relative tolerence for the relative residual used to determine convergence. 
- * 				Smaller => greater accuracy ,but more iterations
- * @return int The number of iterations used to reach convergence
- */
-static int sor(bvp_t restrict bvp, const double reltol, unsigned int num_threads_total){
+		rel_res = dT_sum/T_sum;	
+		iterations++;
+    
+    } while (rel_res >= reltol);
 
-	const unsigned int n = bvp->n;
-
-	/* Relative residual*/
-	
-    double rel_res = 1.0;
-
-    int iterations = 0;
-
-	const unsigned int i_start 	= bvp->nm_flags & NM_X0 ? 0 : 1;
-	const unsigned int i_end 	= bvp->nm_flags & NM_X1 ? n : n-1;
-	const unsigned int j_start 	= bvp->nm_flags & NM_Y0 ? 0 : 1;
-	const unsigned int j_end 	= bvp->nm_flags & NM_Y1 ? n : n-1;
-
-	unsigned int num_threads_waiting = 0;
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
-	double T_sum_tot, dT_sum_tot;
-
-	THREAD_DATA *thread_data = (THREAD_DATA*) calloc(num_threads_total, sizeof(THREAD_DATA));
-	pthread_t *thread = (pthread_t*) calloc(num_threads_total, sizeof(pthread_t));
-	for (int i = 0; i < num_threads_total; i++)
-	{
-		thread_data[i].mutex = &mutex;
-		thread_data[i].cv = &cv;
-		thread_data[i].bvp = bvp;
-		thread_data[i].i_start = i*i_end/num_threads_total+i_start;
-		thread_data[i].i_end = (i+1)*i_end/num_threads_total+i_start;
-		thread_data[i].j_start = j_start;
-		thread_data[i].j_end = j_end;
-		thread_data[i].reltol = reltol;
-		thread_data[i].rel_res = &rel_res;
-		thread_data[i].T_sum_tot = &T_sum_tot;
-		thread_data[i].dT_sum_tot = &dT_sum_tot;
-		thread_data[i].num_threads_total = num_threads_total;
-		thread_data[i].num_threads_waiting = &num_threads_waiting;
-		thread_data[i].iterations = &iterations;
-		pthread_create(&thread[i],NULL,(void*) &red_black_sor, (void*) &thread_data[i]);
-	}
-	for (int i = 0; i < num_threads_total; i++)
-	{
-		pthread_join(thread[i], NULL);
-	}
-	
-	pthread_mutex_destroy(&mutex);
-	pthread_cond_destroy(&cv);
-
-    return iterations/2;  
+    return iterations;
 }
 
 /**
@@ -248,20 +124,190 @@ static int sor(bvp_t restrict bvp, const double reltol, unsigned int num_threads
  * 				Smaller => greater accuracy ,but more iterations
  * @return int The number of iterations used to reach convergence
  */
-int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double reltol, const unsigned int num_threads_total){
+int bvp_solve(bvp_t restrict bvp, const unsigned int use_multigrid, const double reltol){
 	int n = bvp->n;
 	int iterations = 0;
 	
 	if(n >= MULTIGRID_MIN && use_multigrid){
 		bvp_t coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_flags);;
-		iterations += solve_poisson_bvp(coarse_bvp, use_multigrid, reltol*2, num_threads_total);
-		bvpcpy(coarse_bvp, bvp);
+		iterations += bvp_solve(coarse_bvp, use_multigrid, reltol);
+		bvp_copy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
 	}
 	
-	iterations += sor(bvp, reltol, num_threads_total);
+	iterations += red_black_sor(bvp, reltol);
 
 	return iterations;
+}
+
+
+/**
+ * @brief Get the value at phi(x,y) using bilinear interpolation
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param x The x-coordinate
+ * @param y The y-coordinate
+ * @return double 
+ */
+double bvp_get_value_at(bvp_t restrict bvp, const double x, const double y){
+
+	double **result = bvp->result;
+	int n = bvp->n;
+	double h = 1.0/(n-1.0);
+
+	// Domain check
+	if (x < 0 || x > 1 || y < 0 || y > 1){
+		return NAN;
+	}
+
+	double *x_values = bvp->x_val;
+	double *y_values = bvp->y_val;
+
+	unsigned int i_1 = x*(n-1);
+	unsigned int i_2 = ceil(x*(n-1));
+	unsigned int j_1 = y*(n-1);
+	unsigned int j_2 = ceil(y*(n-1));
+
+	double t11 = result[i_1][j_1];
+	double t21 = result[i_2][j_1];
+	double t12 = result[i_1][j_2];
+	double t22 = result[i_2][j_2];
+
+	double x_norm = (x-x_values[i_1])/h;
+	double y_norm = (y-y_values[j_1])/h;
+
+	double t_xy = t11*(2.0 - x_norm - y_norm) + t21*(1.0 + x_norm - y_norm) + t12*(1.0 - x_norm + y_norm) + t22*(x_norm + y_norm);
+
+	return 0.25*t_xy;
+}
+
+/**
+ * @brief Shifts the entire solution by delta_t. Used to correct a solution with only Neumann boundaries
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param delta_t The value to shift the solution by
+ */
+bvp_t bvp_shift_solution(bvp_t restrict bvp, const double delta_t){
+
+	if (bvp != NULL){
+
+		double *result = bvp->result[0];
+		int n = bvp->n;
+		int n2 = n*n;
+		
+		for (int i = 0; i < n2; i++){
+
+			result[i] += delta_t;
+
+		}
+	}
+
+	return bvp;
+}
+
+/**
+ * @brief Create and initialize a Poisson Boundary Value Problem
+ * 
+ * @param n The number of discretised points along an axis
+ * @param phi The function phi(x,y) used to prescribe Dirichlet boundaries. If NULL, is threated as phi(x,y) = 0
+ * @param g The function g(x,y) on the right side of the Poisson equation. If NULL, is threated as g(x,y) = 0
+ * @param nm_flags Flags that is used to specify Neumann boundaries, if any. If there isn't any, set it as 0
+ * @return bvp_t The Boundary Value Problem with an initial n-by-n grid with prescribed Dirichlet boundaries, if any
+ */
+bvp_t bvp_create(unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags){
+	
+	bvp_t bvp = malloc(sizeof(struct bvp_t));
+
+	bvp->n = n;
+	bvp->phi = phi;
+	bvp->g = g;
+	bvp->nm_flags = nm_flags;
+
+	double *x = create_linear_array(0.0, 1.0, n);
+	double *y = x;
+
+	bvp->x_val = x;
+	bvp->y_val = y;
+
+	// Initialize the RHS
+	double *rhs = calloc(n*n,sizeof(double));
+	bvp->b = calloc(n, sizeof(double*));
+
+	for (int i = 0; i < n; i++)
+	{
+		bvp->b[i] = rhs + i*n;
+	}
+	add_values(bvp->b,g,n,x,y,0,n,0,n);
+
+	// Initialize the 2D solution array, including "ghost cells" on the sides, to prevent out-of-bound access
+	double *datapoints = calloc((n+2)*n,sizeof(double));
+	
+	bvp->result = calloc(n+2, sizeof(double*));
+	for (int i = 0; i < n+2; i++)
+	{
+		bvp->result[i] = datapoints + i*n;
+	}
+	(bvp->result)++;
+	
+	// Initialize Dirichlet boundaries
+	if(!(bvp->nm_flags & NM_X0)) add_values(bvp->result,phi,n,x,y,0,n,0,1);
+	if(!(bvp->nm_flags & NM_X1)) add_values(bvp->result,phi,n,x,y,0,n,n-1,n);
+	if(!(bvp->nm_flags & NM_Y0)) add_values(bvp->result,phi,n,x,y,0,1,0,n);
+	if(!(bvp->nm_flags & NM_Y1)) add_values(bvp->result,phi,n,x,y,n-1,n,0,n);
+	
+	return bvp;
+}
+
+/**
+ * @brief Copy result of a bvp over to another bvp. If destination BVP is NULL, create a new one. Uses bilinear interpolation
+ * 
+ * @param src_bvp The source BVP solution, non-null
+ * @param dest_bvp The destination BVP solution, NULL if a new one is to be created
+ * @return ibvp_t The destination BVP if successful, NULL otherwise.
+ */
+bvp_t bvp_copy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp){
+	
+	if (src_bvp == NULL)
+		return NULL;
+	
+	else if (dest_bvp == NULL)
+		dest_bvp = bvp_create(src_bvp->n , src_bvp->phi , src_bvp->g , src_bvp->nm_flags);
+
+	
+	const int dest_n = dest_bvp->n;
+	double **dest_r = dest_bvp->result;
+
+	for(int i = 0; i < dest_n; i++){
+		
+		double x = dest_bvp->x_val[i];
+		
+		for(int j = 0; j < dest_n; j++){
+			
+			double y = dest_bvp->y_val[j];
+			dest_r[i][j] = bvp_get_value_at(src_bvp, x, y);
+		
+		}
+	
+	}
+
+	return dest_bvp;
+}
+
+/**
+ * @brief Free up memory occupied by the Boundary Value Problem
+ * 
+ * @param bvp The Boundary Value Problem
+ */
+void bvp_destroy(bvp_t restrict bvp){
+	--(bvp->result);
+	free((bvp->result[0]));
+	free(bvp->result);
+
+	free(bvp->x_val);
+	free(bvp->b[0]);
+	free(bvp->b);
+
+	free(bvp);
 }
 
 /**
@@ -279,7 +325,7 @@ int solve_poisson_bvp(bvp_t bvp, const unsigned int use_multigrid, const double 
  * @param bvp The Boundary Value Problem
  * @param filename The full filename. Can include path
  */
-void print_solution_to_file(bvp_t bvp, const char *name){
+void bvp_print_solution_to_file(bvp_t restrict bvp, const char *name){
 	int n = bvp->n;
 	double **result = bvp->result;
 
@@ -314,7 +360,7 @@ void print_solution_to_file(bvp_t bvp, const char *name){
  * @param bvp The Boundary Value Problem
  * @param filename The full filename. Can include path
  */
-void create_gnuplot_data(bvp_t bvp, const char *name){
+void bvp_create_gnuplot_data(bvp_t restrict bvp, const char *name){
 	const unsigned int n = bvp->n;
 	double **result = bvp->result;
 	const double *x_vals = bvp->x_val;
@@ -343,138 +389,4 @@ void create_gnuplot_data(bvp_t bvp, const char *name){
         }
 	fclose(f);
 
-}
-
-/**
- * @brief Get the value at phi(x,y) using bilinear interpolation
- * 
- * @param bvp The Boundary Value Problem
- * @param x The x-coordinate
- * @param y The y-coordinate
- * @return double 
- */
-double get_value_at(bvp_t restrict bvp, const double x, const double y){
-
-	double **result = bvp->result;
-	int n = bvp->n;
-	double h = 1.0/(n-1.0);
-
-	// Domain check
-	if (x < 0 || x > 1 || y < 0 || y > 1){
-		printf("( %f , %f ) is outside of the domain\n", x, y);
-    	exit(1);
-	}
-
-	double *x_values = bvp->x_val;
-	double *y_values = bvp->y_val;
-
-	unsigned int i_left = x*(n-1);
-	unsigned int i_right = ceil(x*(n-1));
-	unsigned int j_left = y*(n-1);
-	unsigned int j_right = ceil(y*(n-1));
-
-	double t11 = result[i_left][j_left];
-	double t21 = result[i_right][j_left];
-	double t12 = result[i_left][j_right];
-	double t22 = result[i_right][j_right];
-
-	double x_normalised = (x-x_values[i_left])/h;
-	double y_normalised = (y-y_values[j_left])/h;
-
-	double a11 = t11;
-	double a21 = t21 - t11;
-	double a12 = t12 - t11;
-	double a22 = t22 + t11 - (t21 + t12);
-	
-	double t_xy = a11 + a21 * x_normalised + a12 * y_normalised + a22 * x_normalised * y_normalised;
-
-	return t_xy;
-}
-
-/**
- * @brief Shifts the entire solution by delta_t. Used to correct a solution with only Neumann boundaries
- * 
- * @param bvp The Boundary Value Problem
- * @param delta_t The value to shift the solution by
- */
-void shift_solution(bvp_t bvp, const double delta_t){
-
-	double *result = bvp->result[0];
-	int n = bvp->n;
-	int n2 = n*n;
-	
-	for (int i = 0; i < n2; i++){
-
-		result[i] += delta_t;
-
-	}
-}
-
-/**
- * @brief Create and initialize a Poisson Boundary Value Problem
- * 
- * @param n The number of discretised points along an axis
- * @param phi The function phi(x,y) used to prescribe Dirichlet boundaries. If NULL, is threated as phi(x,y) = 0
- * @param g The function g(x,y) on the right side of the Poisson equation. If NULL, is threated as g(x,y) = 0
- * @param nm_flags Flags that is used to specify Neumann boundaries, if any. If there isn't any, set it as 0
- * @return bvp_t The Boundary Value Problem with an initial n-by-n grid with prescribed Dirichlet boundaries, if any
- */
-bvp_t bvp_create(unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags){
-	bvp_t bvp = malloc(sizeof(struct bvp_t));
-
-	bvp->n = n;
-	bvp->phi = phi;
-	bvp->g = g;
-	bvp->nm_flags = nm_flags;
-
-	double *x = create_linear_array(0, 1, n);
-	double *y = x;
-
-	bvp->x_val = x;
-	bvp->y_val = y;
-
-	// Initialize the RHS
-	double *rhs = calloc(n*n,sizeof(double));
-	bvp->b = calloc(n, sizeof(double*));
-
-	for (int i = 0; i < n; i++)
-	{
-		bvp->b[i] = rhs + i*n;
-	}
-	add_values(bvp->b,g,n,x,y,0,n,0,n);
-
-	// Initialize the 2D solution array, including "ghost cells" on the sides, to prevent out-of-bound access
-	double *datapoints = calloc((n+2)*n,sizeof(double));
-	
-	bvp->result = calloc(n+2, sizeof(double*));
-	for (int i = 0; i < n+2; i++)
-	{
-		bvp->result[i] = datapoints + i*n;
-	}
-	(bvp->result)++;
-	
-	// Initialize the boundaries
-	if(!(bvp->nm_flags & NM_X0)) add_values(bvp->result,phi,n,x,y,0,n,0,1);
-	if(!(bvp->nm_flags & NM_X1)) add_values(bvp->result,phi,n,x,y,0,n,n-1,n);
-	if(!(bvp->nm_flags & NM_Y0)) add_values(bvp->result,phi,n,x,y,0,1,0,n);
-	if(!(bvp->nm_flags & NM_Y1)) add_values(bvp->result,phi,n,x,y,n-1,n,0,n);
-	
-	return bvp;
-}
-
-/**
- * @brief Free up memory occupied by the Boundary Value Problem
- * 
- * @param bvp The Boundary Value Problem
- */
-void bvp_destroy(bvp_t bvp){
-	--(bvp->result);
-	free((bvp->result[0]));
-	free(bvp->result);
-
-	free(bvp->x_val);
-	free(bvp->b[0]);
-	free(bvp->b);
-
-	free(bvp);
 }
