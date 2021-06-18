@@ -29,48 +29,6 @@
  */
 typedef struct bvp_t* bvp_t;
 
-/**
- * @brief Get the value at phi(x,y) using bilinear interpolation
- * 
- * @param bvp The Boundary Value Problem
- * @param x The x-coordinate
- * @param y The y-coordinate
- * @return double 
- */
-double bvp_get_value_at(bvp_t restrict bvp, const double x, const double y);
-
-/**
- * @brief Shifts the entire solution by delta_t. Used to correct a solution with only Neumann boundaries
- * 
- * @param bvp The Boundary Value Problem
- * @param delta_t The value to shift the solution by
- */
-bvp_t shift_solution(bvp_t restrict bvp, const double delta_t);
-
-/**
- * @brief Saves the solution to file
- * @param bvp The Boundary Value Problem
- * @param filename The full filename. Can include path
- */
-void bvp_print_solution_to_file(bvp_t restrict bvp, const char *filename);
-
-/**
- * @brief Saves the solution to file in a format suitable for gnuplot: x y z, where z = phi(x,y)x y z, where z = phi(x,y)
- * 
- * @param bvp The Boundary Value Problem
- * @param filename The full filename. Can include path
- */
-void bvp_create_gnuplot_data(bvp_t restrict bvp, const char *filename);
-
-/**
- * @brief Solve the given Poisson Boundary Value Problem
- * 
- * @param bvp The Boundary Value Problem
- * @param use_multigrid Whether or not to us multigrid preconditioning
- * @param reltol The relative tolerence for the relative residual convergence. Smaller => greater accuracy but more iterations
- * @return int The number of iterations used to reach convergence
- */
-int bvp_solve(bvp_t bvp, const unsigned int use_multigrid, const double reltol);
 
 /**
  * @brief Create and initialize a Poisson Boundary Value Problem
@@ -83,6 +41,49 @@ int bvp_solve(bvp_t bvp, const unsigned int use_multigrid, const double reltol);
  */
 bvp_t bvp_create(const unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags);
 
+
+/**
+ * @brief Solve the given Poisson Boundary Value Problem
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param use_multigrid Whether or not to us multigrid preconditioning
+ * @param reltol The relative tolerence for the relative residual convergence. Smaller => greater accuracy but more iterations
+ * @return int The number of iterations used to reach convergence
+ */
+int bvp_solve(bvp_t restrict bvp, const unsigned int use_multigrid, const double reltol);
+
+
+/**
+ * @brief Iterate using Succesive Over-Relaxation for the Red-Black-Gauss-Seidel method
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param reltol The relative tolerence for the relative residual used to determine convergence. 
+ *              Smaller => greater accuracy ,but more iterations
+ * @return int The number of iterations used to reach convergence
+ */
+int red_black_sor(bvp_t restrict bvp, const double reltol);
+
+
+/**
+ * @brief Get the value at phi(x,y) using bilinear interpolation
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param x The x-coordinate
+ * @param y The y-coordinate
+ * @return double 
+ */
+double bvp_get_value_at(const bvp_t restrict bvp, const double x, const double y);
+
+
+/**
+ * @brief Shifts the entire solution by dz. Used to correct a solution with only Neumann boundaries
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param dz The value to shift the solution by
+ */
+bvp_t bvp_shift_solution(bvp_t restrict bvp, const double dz);
+
+
 /**
  * @brief Copy result of a bvp over to another bvp. If destination BVP is NULL, creates a new one. Uses bilinear interpolation
  * 
@@ -90,7 +91,8 @@ bvp_t bvp_create(const unsigned int n, double (*phi)(double x, double y),double 
  * @param dest_bvp The destination BVP solution
  * @return bvp_t The destination BVP if successful, NULL otherwise
  */
-bvp_t bvp_copy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp);
+bvp_t bvp_copy(const bvp_t restrict src, bvp_t restrict dst);
+
 
 /**
  * @brief Free up memory occupied by the Boundary Value Problem
@@ -98,5 +100,22 @@ bvp_t bvp_copy(const bvp_t restrict src_bvp, bvp_t restrict dest_bvp);
  * @param bvp The Boundary Value Problem
  */
 void bvp_destroy(bvp_t restrict bvp);
+
+
+/**
+ * @brief Saves the solution to file
+ * @param bvp The Boundary Value Problem
+ * @param filename
+ */
+void bvp_print_solution_to_file(const bvp_t restrict bvp, const char *filename);
+
+
+/**
+ * @brief Saves the solution to file in a format suitable for gnuplot: x y z, where z = phi(x,y)x y z, where z = phi(x,y)
+ * 
+ * @param bvp The Boundary Value Problem
+ * @param filename
+ */
+void bvp_create_gnuplot_data(const bvp_t restrict bvp, const char *filename);
 
 #endif
