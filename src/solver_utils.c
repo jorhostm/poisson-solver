@@ -23,7 +23,7 @@
  * @param n The amount of discretized points along an axis.
  * @return double The theoretical optimal relaxation factor
  */
-double get_next_omega(double omega, const unsigned int n){
+double bvp_utils_get_next_omega(double omega, const unsigned int n){
 	
 	double rho = cosl(M_PI/(n-1)); 		// Spectral radius of the Jacobi iteration matrix, rho(C_J)
 	
@@ -45,7 +45,7 @@ double get_next_omega(double omega, const unsigned int n){
  * @param j_start 	Start index for y-values
  * @param j_end 	End index for y-values
  */
-void add_values(double** T, double (*func)(double x, double y), const unsigned int n, double* x_vals, double* y_vals, const unsigned int i_start, const unsigned int i_end, const unsigned int j_start, const unsigned int j_end){
+void bvp_utils_add_values(double** T, double (*func)(double x, double y), const unsigned int n, double* x_vals, double* y_vals, const unsigned int i_start, const unsigned int i_end, const unsigned int j_start, const unsigned int j_end){
 	
 	if (func == NULL)
 	{
@@ -68,7 +68,7 @@ void add_values(double** T, double (*func)(double x, double y), const unsigned i
  * @param count The total number of values in the array
  * @return double* pointer to the linear array
  */
-double* create_linear_array(const double from, const double to, const unsigned int count){
+double* bvp_utils_create_linear_array(const double from, const double to, const unsigned int count){
 
 	double h = (to - from)/((double) count - 1);
 

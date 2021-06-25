@@ -41,10 +41,10 @@ typedef struct {
     int *iterations;
 } THREAD_DATA;
 
-double get_next_omega(double omega, const unsigned int n);
+double bvp_utils_get_next_omega(double omega, const unsigned int n);
 
-void add_values(double **T, double (*fun)(double x, double y), const unsigned int n, double* x, double* y, const unsigned int i_start, const unsigned int i_end, const unsigned int j_start, const unsigned int j_end);
+void bvp_utils_add_values(double **T, double (*fun)(double x, double y), const unsigned int n, double* x, double* y, const unsigned int i_start, const unsigned int i_end, const unsigned int j_start, const unsigned int j_end);
 
-double* create_linear_array(const double from, const double to, const unsigned int count);
+double* bvp_utils_create_linear_array(const double from, const double to, const unsigned int count);
 
 #endif
