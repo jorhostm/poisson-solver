@@ -25,7 +25,7 @@
 #endif
 
 /**
- * @brief Poisson Boundary Value Type
+ * @brief Poisson Boundary Value Problem Type
  */
 typedef struct bvp_t* bvp_t;
 
@@ -65,7 +65,7 @@ int red_black_sor(bvp_t restrict bvp, const double reltol);
 
 
 /**
- * @brief Get the value at phi(x,y) using bilinear interpolation
+ * @brief Get the value of phi(x,y) using bilinear interpolation
  * 
  * @param bvp The Boundary Value Problem
  * @param x The x-coordinate
@@ -85,10 +85,10 @@ bvp_t bvp_shift_solution(bvp_t restrict bvp, const double dz);
 
 
 /**
- * @brief Copy result of a bvp over to another bvp. If destination BVP is NULL, creates a new one. Uses bilinear interpolation
+ * @brief Copy result of a bvp over to another bvp.
  * 
- * @param src_bvp The source BVP solution
- * @param dest_bvp The destination BVP solution
+ * @param src The source BVP solution
+ * @param dst The destination BVP solution. If NULL, create a new one
  * @return bvp_t The destination BVP if successful, NULL otherwise
  */
 bvp_t bvp_copy(const bvp_t restrict src, bvp_t restrict dst);
@@ -105,17 +105,17 @@ void bvp_destroy(bvp_t restrict bvp);
 /**
  * @brief Saves the solution to file
  * @param bvp The Boundary Value Problem
- * @param filename
+ * @param name
  */
-void bvp_print_solution_to_file(const bvp_t restrict bvp, const char *filename);
+void bvp_print_solution_to_file(const bvp_t restrict bvp, const char *name);
 
 
 /**
- * @brief Saves the solution to file in a format suitable for gnuplot: x y z, where z = phi(x,y)x y z, where z = phi(x,y)
+ * @brief Saves the solution to file in a format suitable for gnuplot: x y phi(x,y)
  * 
  * @param bvp The Boundary Value Problem
- * @param filename
+ * @param name
  */
-void bvp_create_gnuplot_data(const bvp_t restrict bvp, const char *filename);
+void bvp_create_gnuplot_data(const bvp_t restrict bvp, const char *name);
 
 #endif

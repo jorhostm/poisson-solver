@@ -85,7 +85,7 @@ int main(int argc, char **argv){
 /**
  * @brief Testing the solver.
  *	Solve the poisson equation with mixed boundary conditions and g(x,y) = 0
- *	Neumann at x = 0 and y = 0, Dirichlet at x = 1 and y = 1 where phi(x,1) = 1 and phi(y,1) = 0
+ *	Neumann at x = 0 and y = 0, Dirichlet at x = 1 and y = 1 where phi(x,1) = 1 and phi(1,y) = 0
  */
 	solver_params mixed = {.name = "Mixed", n, .phi = &mix, .g = NULL, save_data, use_multigrid, reltol, .nm_flags = NM_X0 | NM_Y0};
 /**

@@ -6,7 +6,6 @@
 #include <getopt.h>
 #include <string.h>
 
-#include <poissonsolver.h>
 #include <example.h>
 
 int main(int argc, char **argv){

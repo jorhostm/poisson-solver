@@ -1,8 +1,7 @@
 IDIR =../include
 LDIR =../lib
 CC=gcc
-CFLAGS= -Ofast -march=native -I$(IDIR)
-FORMAT=
+CFLAGS= -Ofast -march=native -I$(IDIR) -pipe
 
 BDIR=../build
 TDIR=$(BDIR)/test
@@ -15,7 +14,6 @@ DEMO_LIBS= -lm
 ifeq ($(OS),Windows_NT)
     CFLAGS += -D WIN32
 	DEMO_LIBS += -lfreeglut -lglu32 -lopengl32
-    FORMAT = .exe
     ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
         CFLAGS += -D AMD64
     else
@@ -27,7 +25,6 @@ ifeq ($(OS),Windows_NT)
         endif
     endif
 else
-    FORMAT = .out
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
         CFLAGS += -D LINUX

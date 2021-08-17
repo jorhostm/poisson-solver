@@ -28,7 +28,7 @@
 bvp_t bvp_create(unsigned int n, double (*phi)(double x, double y),double (*g)(double x, double y), int nm_flags){
 	
 	bvp_t bvp = malloc(sizeof(struct bvp_t));
-
+	
 	bvp->n = n;
 	bvp->phi = phi;
 	bvp->g = g;
@@ -85,7 +85,7 @@ int bvp_solve(bvp_t restrict bvp, const unsigned int use_multigrid, const double
 	
 	if(n >= MULTIGRID_MIN && use_multigrid){
 		bvp_t coarse_bvp = bvp_create(n/2, bvp->phi,bvp->g,bvp->nm_flags);
-		iterations += bvp_solve(coarse_bvp, use_multigrid, reltol);
+		iterations += bvp_solve(coarse_bvp, use_multigrid, reltol/2);
 		bvp_copy(coarse_bvp, bvp);
 		bvp_destroy(coarse_bvp);
 	}
@@ -107,7 +107,7 @@ int red_black_sor(bvp_t restrict bvp, const double reltol){
 
 	const unsigned int n = bvp->n;
 	double **T = bvp->result;
-	const double **b = bvp->b;
+	double **b = bvp->b;
 	const double h = 1.0/( n - 1.0);
 	const double h2 = h*h;
 
@@ -195,7 +195,7 @@ int red_black_sor(bvp_t restrict bvp, const double reltol){
 
 
 /**
- * @brief Get the value at phi(x,y) using bilinear interpolation
+ * @brief Get the value of phi(x,y) using bilinear interpolation
  * 
  * @param bvp The Boundary Value Problem
  * @param x The x-coordinate
@@ -260,10 +260,10 @@ bvp_t bvp_shift_solution(bvp_t restrict bvp, const double dz){
 
 
 /**
- * @brief Copy result of a bvp over to another bvp. If destination BVP is NULL, create a new one. Uses bilinear interpolation
+ * @brief Copy result of a bvp over to another bvp. Uses bilinear interpolation
  * 
  * @param src The source BVP solution, non-null
- * @param dst The destination BVP solution, NULL if a new one is to be created
+ * @param dst The destination BVP solution, If NULL, create a new one.
  * @return bvp_t The destination BVP if successful, NULL otherwise.
  */
 bvp_t bvp_copy(const bvp_t restrict src, bvp_t restrict dst){
@@ -324,7 +324,7 @@ void bvp_destroy(bvp_t restrict bvp){
  * .
  * phi(1,1)
  * @param bvp The Boundary Value Problem
- * @param filename
+ * @param name
  */
 void bvp_print_solution_to_file(const bvp_t restrict bvp, const char* restrict name){
 	int n = bvp->n;
@@ -359,7 +359,7 @@ void bvp_print_solution_to_file(const bvp_t restrict bvp, const char* restrict n
  * @brief Saves the solution to file in a format suitable for gnuplot: x y z, where z = phi(x,y)
  * 
  * @param bvp The Boundary Value Problem
- * @param filename
+ * @param name
  */
 void bvp_create_gnuplot_data(const bvp_t restrict bvp, const char* restrict name){
 	const unsigned int n = bvp->n;
